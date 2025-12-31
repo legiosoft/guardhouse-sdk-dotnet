@@ -1,14 +1,17 @@
 # Guardhouse SDK for .NET
 
-Guardhouse SDK for .NET provides seamless integration with Guardhouse OpenID Connect/OAuth IDaaS Identity Server. This SDK enables your .NET applications to act as both **Clients** (requesting tokens) and **Resources** (validating tokens and protecting APIs).
+Guardhouse SDK for .NET provides a **complete replacement for OpenIdDict** in .NET applications. This SDK enables your .NET applications to integrate with Guardhouse OpenID Connect/OAuth IDaaS Identity Server for token management and API protection.
 
 ## What is Guardhouse?
 
-Guardhouse is an OpenID/OAuth IDaaS Identity Server (similar to Auth0) that can:
-- Issue new access tokens
-- Introspect tokens via the introspection endpoint
-- Provide other OpenID Connect functionality
-- Manage user authentication and authorization
+Guardhouse is an OpenID/OAuth IDaaS Identity Server that provides:
+- OAuth 2.0 token endpoint
+- Token introspection endpoint
+- JWT token validation
+- User authentication and authorization
+- OpenID Connect discovery
+
+**Note:** This SDK is a **modern replacement** for OpenIdDict. You can replace OpenIdDict dependencies with Guardhouse SDK for simplified token management and authentication.
 
 ## Understanding Client vs Resource
 
