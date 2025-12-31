@@ -1,0 +1,491 @@
+﻿# =====================================================================================
+# This .editorconfig file contains a complete set of .NET code style rules based on Microsoft documentation..
+#
+# Severity levels:
+# silent      - Do not show
+# suggestion  - Suggestion (hint with a light bulb)
+# warning     - Warning (green underline, warning during compilation)
+# error       - Error (red underline, error during compilation)
+# =====================================================================================
+
+root = true
+
+[*.cs]
+# ======================================================================================================================
+# C# Code Style Rules (.NET)
+# ======================================================================================================================
+
+# Name simplification
+# ----------------------------------------------------------------------------------------------------------------------
+
+# IDE0001: Simplify name
+# This rule concerns simplifying type names. For example, 'System.Int32' can be simplified to 'int'.
+dotnet_diagnostic.IDE0001.severity = warning
+
+# IDE0002: Simplify member access
+# This rule flags unnecessary qualification. For example, 'this.age' can be simplified to 'age'.
+dotnet_diagnostic.IDE0002.severity = warning
+
+# Unnecessary code
+# ----------------------------------------------------------------------------------------------------------------------
+
+# IDE0004: Remove unnecessary cast
+# This rule identifies casts that are not required.
+dotnet_diagnostic.IDE0004.severity = warning
+
+# Modifier preferences
+# ----------------------------------------------------------------------------------------------------------------------
+
+# IDE0007: Use 'var' instead of explicit type
+# This rule suggests using 'var' for variable declarations when the type is obvious from the right side of the assignment.
+dotnet_diagnostic.IDE0007.severity = warning
+csharp_style_var_for_built_in_types = true
+csharp_style_var_when_type_is_apparent = true
+csharp_style_var_elsewhere = true
+
+# IDE0009: Use explicit type for member access
+# This rule requires specifying the type name when accessing static members, e.g., 'TimeSpan.FromSeconds(1)' instead of just 'FromSeconds(1)' after a 'using static System.TimeSpan;'.
+dotnet_diagnostic.IDE0009.severity = warning
+
+# Expression-level preferences
+# ----------------------------------------------------------------------------------------------------------------------
+
+# IDE0010: Add missing cases to switch statement
+# This rule ensures that a 'switch' statement on an enum covers all possible enum members.
+dotnet_diagnostic.IDE0010.severity = warning
+
+# IDE0011: Add braces
+# This rule enforces the use of curly braces for all 'if', 'else', 'for', 'while', etc., statements, even if they are single-line.
+dotnet_diagnostic.IDE0011.severity = warning
+
+# IDE0016: Use throw expression
+# This rule suggests using the 'throw' expression for null checks where applicable, for example 'x ?? throw new ArgumentNullException(nameof(x));'.
+dotnet_diagnostic.IDE0016.severity = warning
+
+# IDE0017: Use object initializers
+# This rule encourages using object initializers 'new Point { X = 0, Y = 1 }' instead of separate assignment statements.
+dotnet_diagnostic.IDE0017.severity = warning
+dotnet_style_object_initializer = true
+
+# IDE0018: Inline variable declaration
+# This rule suggests declaring and initializing 'out' variables at the call site, e.g., 'int.TryParse(s, out var i)'.
+dotnet_diagnostic.IDE0018.severity = warning
+
+# IDE0019: Use pattern matching
+# This rule suggests using pattern matching to avoid 'is' checks followed by a cast.
+dotnet_diagnostic.IDE0019.severity = warning
+
+# IDE0020: Use pattern matching
+# This rule suggests using pattern matching with 'switch' statements.
+dotnet_diagnostic.IDE0020.severity = warning
+
+# IDE0021: Use expression body for constructors
+# This rule suggests using an expression body '=>' for simple, single-line constructors.
+dotnet_diagnostic.IDE0021.severity = warning
+
+# IDE0022: Use expression body for methods
+# This rule suggests using an expression body '=>' for simple, single-line methods.
+dotnet_diagnostic.IDE0022.severity = warning
+
+# IDE0023: Use expression body for conversion operators
+# This rule suggests using an expression body '=>' for simple conversion operators.
+dotnet_diagnostic.IDE0023.severity = warning
+
+# IDE0024: Use expression body for operators
+# This rule suggests using an expression body '=>' for simple operator overloads.
+dotnet_diagnostic.IDE0024.severity = warning
+
+# IDE0025: Use expression body for properties
+# This rule suggests using an expression body '=>' for simple, single-line properties.
+dotnet_diagnostic.IDE0025.severity = warning
+
+# IDE0026: Use expression body for indexers
+# This rule suggests using an expression body '=>' for simple, single-line indexers.
+dotnet_diagnostic.IDE0026.severity = warning
+
+# IDE0027: Use expression body for accessors
+# This rule suggests using an expression body '=>' for simple property 'get' and 'set' accessors.
+dotnet_diagnostic.IDE0027.severity = warning
+
+# IDE0028: Use collection initializers
+# This rule encourages using collection initializers '{ "a", "b" }' instead of multiple 'Add' calls.
+dotnet_diagnostic.IDE0028.severity = warning
+
+# IDE0029: Use null-coalescing operator
+# This rule suggests using the null-coalescing operator '??' instead of a ternary conditional operator '?:' for null checks.
+dotnet_diagnostic.IDE0029.severity = warning
+
+# IDE0030: Use null-conditional operator
+# This rule suggests using the null-conditional operator '?.' instead of an explicit null check before accessing a member.
+dotnet_diagnostic.IDE0030.severity = warning
+
+# IDE0031: Use null propagation
+# This rule is another name for IDE0030, suggesting the use of the null-conditional operator '?.'.
+dotnet_diagnostic.IDE0031.severity = warning
+
+# IDE0032: Use auto-implemented property
+# This rule suggests using an auto-property when a property's get and set accessors simply access a private backing field.
+dotnet_diagnostic.IDE0032.severity = warning
+
+# IDE0033: Use explicit tuple name
+# This rule suggests using named tuple elements instead of 'ItemX' properties.
+dotnet_diagnostic.IDE0033.severity = warning
+
+# IDE0034: Simplify 'default' expression
+# This rule suggests using the simplified 'default' literal instead of 'default(T)'.
+dotnet_diagnostic.IDE0034.severity = warning
+
+# IDE0035: Remove unreachable code
+# This rule identifies and removes code that can never be executed.
+dotnet_diagnostic.IDE0035.severity = warning
+
+# IDE0036: Order modifiers
+# This rule enforces a consistent order for modifiers (e.g., 'public static readonly').
+dotnet_diagnostic.IDE0036.severity = warning
+
+# IDE0037: Use inferred member names
+# This rule suggests omitting the member name in an anonymous type or tuple when it can be inferred from the variable used for initialization.
+dotnet_diagnostic.IDE0037.severity = warning
+
+# IDE0038: Use 'is null' check
+# This rule suggests using 'is null' instead of '== null' for reference equality checks.
+dotnet_diagnostic.IDE0038.severity = warning
+
+# IDE0039: Use local function instead of lambda
+# This rule suggests using a local function instead of a lambda expression when a delegate is assigned to a local variable and never returned or passed as an argument.
+dotnet_diagnostic.IDE0039.severity = warning
+
+# IDE0040: Add accessibility modifiers
+# This rule enforces the explicit declaration of accessibility (e.g., 'public', 'private').
+dotnet_diagnostic.IDE0040.severity = warning
+
+# IDE0041: Use 'is null' check
+# This rule is an alternative to IDE0038, preferring 'is null' over reference equality '=='.
+dotnet_diagnostic.IDE0041.severity = warning
+
+# IDE0042: Deconstruct variable declaration
+# This rule suggests deconstructing a tuple or an object into separate variables.
+dotnet_diagnostic.IDE0042.severity = warning
+
+# IDE0043: Use 'nameof' expression
+# This rule is not in use.
+dotnet_diagnostic.IDE0043.severity = warning
+
+# IDE0044: Make field readonly
+# This rule suggests making a private field 'readonly' if it's only initialized in the constructor.
+dotnet_diagnostic.IDE0044.severity = warning
+
+# IDE0045: Use conditional expression for assignment
+# This rule suggests using a ternary conditional operator '?:' for assignment instead of an 'if-else' statement.
+dotnet_diagnostic.IDE0045.severity = warning
+
+# IDE0046: Use conditional expression for return
+# This rule suggests using a ternary conditional operator '?:' for return statements instead of an 'if-else' statement.
+dotnet_diagnostic.IDE0046.severity = warning
+dotnet_style_prefer_conditional_expression_over_return = false
+
+# IDE0047: Encapsulate field
+# This rule offers to create a property for a field and replace usages of the field with the new property.
+dotnet_diagnostic.IDE0047.severity = warning
+
+# IDE0048: Add parentheses for clarity
+# This rule recommends adding parentheses to clarify operator precedence in expressions.
+dotnet_diagnostic.IDE0048.severity = warning
+
+# IDE0049: Use language keywords instead of framework type names for type references
+# This rule prefers built-in language keywords (e.g., 'int') over framework type names (e.g., 'Int32').
+dotnet_diagnostic.IDE0049.severity = warning
+
+# IDE0050: Convert anonymous type to tuple
+# This rule suggests converting an anonymous type to a tuple when possible.
+dotnet_diagnostic.IDE0050.severity = warning
+
+# IDE0051: Remove unused private members
+# This rule identifies and removes unused private fields, methods, properties, etc.
+dotnet_diagnostic.IDE0051.severity = warning
+
+# IDE0052: Remove unread private members
+# This rule identifies private members that are assigned but whose values are never read.
+dotnet_diagnostic.IDE0052.severity = warning
+
+# IDE0053: Use expression body for lambda expressions
+# This rule suggests using an expression body '=>' for simple, single-line lambda expressions.
+dotnet_diagnostic.IDE0053.severity = warning
+
+# IDE0054: Use compound assignment
+# This rule suggests using compound assignment operators (e.g., '+=', '-=') for brevity.
+dotnet_diagnostic.IDE0054.severity = warning
+
+# IDE0055: Fix formatting
+# This rule fixes code formatting according to the current settings.
+dotnet_diagnostic.IDE0055.severity = warning
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents_when_block = false
+
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_parentheses = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_after_comma = true
+csharp_space_before_comma = false
+csharp_space_after_dot = false
+csharp_space_before_dot = false
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_around_declaration_statements = false
+csharp_space_before_open_square_brackets = false
+csharp_space_between_empty_square_brackets = false
+csharp_space_between_square_brackets = false
+
+# IDE0056: Use index operator
+# This rule suggests using the index operator '[]' instead of calling a method like 'ElementAt'.
+dotnet_diagnostic.IDE0056.severity = warning
+
+# IDE0057: Use range operator
+# This rule suggests using the range operator '..' instead of calls to 'Substring' or similar methods.
+dotnet_diagnostic.IDE0057.severity = warning
+
+# IDE0059: Remove unnecessary value assignment
+# This rule identifies when a value assigned to a variable is never used.
+dotnet_diagnostic.IDE0059.severity = warning
+
+# IDE0060: Remove unused parameter
+# This rule identifies method parameters that are not used in the method body.
+dotnet_diagnostic.IDE0060.severity = warning
+
+# IDE0061: Use expression body for local functions
+# This rule suggests using an expression body '=>' for simple, single-line local functions.
+dotnet_diagnostic.IDE0061.severity = warning
+
+# IDE0062: Make local function 'static'
+# This rule suggests making a local function 'static' if it doesn't capture any variables from the enclosing scope.
+dotnet_diagnostic.IDE0062.severity = warning
+
+# IDE0063: Use 'using' statement
+# This rule suggests wrapping IDisposable objects in a 'using' statement to ensure they are properly disposed of.
+dotnet_diagnostic.IDE0063.severity = warning
+
+# IDE0064: Struct can be made 'readonly'
+# This rule identifies structs whose members are all readonly and suggests making the struct itself 'readonly'.
+dotnet_diagnostic.IDE0064.severity = warning
+
+# IDE0065: 'using' directive placement
+# This rule enforces placing 'using' directives either inside or outside the namespace declaration based on configuration.
+dotnet_diagnostic.IDE0065.severity = warning
+csharp_using_directive_placement=inside_namespace
+dotnet_sort_system_directives_first = true
+
+# IDE0066: Use 'switch' expression
+# This rule suggests converting 'switch' statements into the more concise 'switch' expression format.
+dotnet_diagnostic.IDE0066.severity = warning
+
+# IDE0070: Use 'System.HashCode.Combine'
+# This rule suggests using the 'System.HashCode.Combine' method to combine hash codes in 'GetHashCode' implementations.
+dotnet_diagnostic.IDE0070.severity = warning
+
+# IDE0071: Simplify interpolation
+# This rule suggests simplifying interpolated strings where possible, for example `$"Hello, {name}"` instead of `string.Format("Hello, {0}", name)`.
+dotnet_diagnostic.IDE0071.severity = warning
+
+# IDE0072: Add missing cases to switch expression
+# This rule ensures that a 'switch' expression on an enum covers all possible enum members.
+dotnet_diagnostic.IDE0072.severity = suggestion
+
+# IDE0073: Require file header
+# This rule requires a specified header comment at the top of source files.
+dotnet_diagnostic.IDE0073.severity = warning
+
+# IDE0074: Use coalesce compound assignment
+# This rule suggests using the null-coalescing compound assignment operator '??='.
+dotnet_diagnostic.IDE0074.severity = warning
+
+# IDE0075: Simplify conditional expression
+# This rule suggests simplifying conditional expressions, for example 'x ? true : false' can be simplified to 'x'.
+dotnet_diagnostic.IDE0075.severity = warning
+
+# IDE0076: Invalid global 'SuppressMessageAttribute'
+# This rule is not in use.
+dotnet_diagnostic.IDE0076.severity = warning
+
+# IDE0077: Avoid legacy format target in 'SuppressMessageAttribute'
+# This rule is not in use.
+dotnet_diagnostic.IDE0077.severity = warning
+
+# IDE0078: Use pattern matching
+# This rule suggests using pattern matching instead of a series of 'is' and 'as' expressions.
+dotnet_diagnostic.IDE0078.severity = warning
+
+# IDE0079: Remove unnecessary suppression
+# This rule identifies and removes '#pragma' or 'SuppressMessageAttribute' suppressions that are no longer necessary.
+dotnet_diagnostic.IDE0079.severity = warning
+
+# IDE0080: Remove unnecessary suppression operator
+# This rule flags the unnecessary use of the suppression operator '!'.
+dotnet_diagnostic.IDE0080.severity = warning
+
+# IDE0082: Convert 'typeof' to 'nameof'
+# This rule suggests using 'nameof(T)' instead of 'typeof(T).Name'.
+dotnet_diagnostic.IDE0082.severity = warning
+
+# IDE0083: Use pattern matching (not 'is' operator)
+# This rule suggests using pattern matching with a type test instead of the 'is' operator followed by a cast.
+dotnet_diagnostic.IDE0083.severity = warning
+
+# IDE0084: Use pattern matching ('is' operator)
+# This rule suggests using the 'is' operator with a type pattern instead of the 'as' operator followed by a null check.
+dotnet_diagnostic.IDE0084.severity = warning
+
+# IDE0090: Simplify 'new' expression
+# This rule suggests using target-typed 'new()' where the type can be inferred.
+dotnet_diagnostic.IDE0090.severity = warning
+
+# IDE0100: Remove redundant equality
+# This rule flags comparisons that are always true or false.
+dotnet_diagnostic.IDE0100.severity = warning
+
+# IDE0110: Remove unnecessary discard
+# This rule flags discards '_' that are not necessary.
+dotnet_diagnostic.IDE0110.severity = warning
+
+# IDE0120: Simplify LINQ expression
+# This rule suggests using direct method calls like '.Count()' instead of '.Where(...).Count()'.
+dotnet_diagnostic.IDE0120.severity = warning
+
+# IDE0130: Namespace does not match folder structure
+# This rule flags when a namespace declaration doesn't align with the file's location in the project.
+dotnet_diagnostic.IDE0130.severity = warning
+
+# IDE0150: Prefer 'null' check over type check
+# This rule suggests 'is not null' instead of checking against the object type for nullability.
+dotnet_diagnostic.IDE0150.severity = warning
+
+# IDE0161: Use file-scoped namespace
+# This rule suggests using file-scoped namespaces ';', which can reduce indentation.
+dotnet_diagnostic.IDE0161.severity = warning
+
+# IDE0170: Simplify property pattern
+# This rule suggests simplifying property patterns when destructuring.
+dotnet_diagnostic.IDE0170.severity = warning
+
+# IDE0180: Unnecessary 'nameof' in 'dynamic' call-site
+# This rule flags the use of 'nameof' where a string literal would suffice in a dynamic context.
+dotnet_diagnostic.IDE0180.severity = warning
+
+# IDE0200: Remove unnecessary lambda expression
+# This rule suggests simplifying code by removing a lambda that just calls another method with the same arguments.
+dotnet_diagnostic.IDE0200.severity = warning
+
+# IDE0210: Convert to 'Program.Main' style program
+# This rule suggests converting to the new minimal API program style without an explicit 'Main' method.
+dotnet_diagnostic.IDE0210.severity = warning
+
+# IDE0211: Convert to top-level statements
+# This rule is an alternative to IDE0210, suggesting conversion to top-level statements.
+dotnet_diagnostic.IDE0211.severity = warning
+
+# IDE0220: Add 'foreach' loop to collection expression
+# This rule suggests adding a 'foreach' loop when iterating over a collection.
+dotnet_diagnostic.IDE0220.severity = warning
+
+# IDE0230: Use 'UTF-8' string literal
+# This rule suggests adding a 'u8' suffix to string literals to specify them as UTF-8.
+dotnet_diagnostic.IDE0230.severity = warning
+
+# IDE0240: Nullable directive is redundant
+# This rule flags '#nullable' directives that are not necessary because they match the project's default setting.
+dotnet_diagnostic.IDE0240.severity = warning
+
+# IDE0241: Nullable directive is unnecessary
+# This rule flags '#nullable' directives that can be removed without changing the semantic meaning of the code.
+dotnet_diagnostic.IDE0241.severity = warning
+
+# IDE0250: Convert to 'struct'
+# This rule suggests converting a 'class' to a 'struct' when appropriate.
+dotnet_diagnostic.IDE0250.severity = warning
+
+# IDE0251: Convert to 'readonly struct'
+# This rule suggests making a struct 'readonly' if all its instance fields are readonly.
+dotnet_diagnostic.IDE0251.severity = warning
+
+# IDE0270: Use not-null assertion
+# This rule suggests using the null-forgiving operator '!' when an expression is known to not be null.
+dotnet_diagnostic.IDE0270.severity = warning
+
+# IDE0280: Use 'nameof'
+# This rule suggests using 'nameof' instead of a string literal for the parameter name in 'ArgumentNullException'.
+dotnet_diagnostic.IDE0280.severity = warning
+
+# IDE0290: Use primary constructor
+# This rule suggests using a primary constructor for a class if it simplifies the code.
+dotnet_diagnostic.IDE0290.severity = warning
+
+# IDE0300: Use collection expression for array
+# This rule suggests using the new collection expression syntax '[...]' for creating arrays.
+dotnet_diagnostic.IDE0300.severity = warning
+
+# IDE0301: Use collection expression for 'empty'
+# This rule suggests using an empty collection expression '[]' instead of 'Array.Empty<T>()'.
+dotnet_diagnostic.IDE0301.severity = warning
+
+# IDE0302: Use collection expression for 'stackalloc'
+# This rule suggests using a collection expression with 'stackalloc'.
+dotnet_diagnostic.IDE0302.severity = warning
+
+# IDE0303: Use collection expression for 'Create'
+# This rule suggests using collection expressions instead of factory 'Create' methods like 'ImmutableArray.Create(...)'.
+dotnet_diagnostic.IDE0303.severity = warning
+
+# IDE0304: Use collection expression for builder
+# This rule suggests using a collection expression instead of a builder pattern with multiple 'Add' calls.
+dotnet_diagnostic.IDE0304.severity = warning
+
+# IDE0305: Use collection expression for fluent
+# This rule suggests using a collection expression instead of fluent chain calls like '.Concat(...)'.
+dotnet_diagnostic.IDE0305.severity = suggestion
+
+# Code-block preferences
+# ----------------------------------------------------------------------------------------------------------------------
+
+# IDE1005: Use conditional delegate call
+# This rule suggests using the null-conditional operator '?.' to invoke a delegate, which avoids an explicit null check.
+dotnet_diagnostic.IDE1005.severity = warning
+
+# IDE1006: Naming rule violation
+# This rule flags violations of configured naming conventions for methods, properties, variables, etc.
+dotnet_diagnostic.IDE1006.severity = warning
+dotnet_naming_style.const_fields_style.capitalization = pascal_case
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.required_modifiers = const
+dotnet_naming_rule.capital_words_should_be_upper_case = true
+dotnet_naming_rule.const_fields_are_pascal_case.symbols = const_fields
+dotnet_naming_rule.const_fields_are_pascal_case.style = const_fields_style
+dotnet_naming_rule.const_fields_are_pascal_case.severity = suggestion
+
+# ======================================================================================================================
+# ======================================================================================================================
+# ======================================================================================================================
+# ======================================================================================================================
+# ======================================================================================================================
+
+# Rider and ReSharper
+resharper_keep_blank_lines_in_code = 1
+resharper_keep_blank_lines_in_declarations = 1

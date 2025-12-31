@@ -73,11 +73,11 @@ public class ServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         services.AddGuardhouseResource(options =>
         {
-            options.Authority = "https://test.com",
-            options.Audience = "test-audience",
-            options.EnableIntrospection = true,
-            IntrospectionClientId = "introspection-client",
-            IntrospectionClientSecret = "introspection-secret"
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+            options.EnableIntrospection = true;
+            options.IntrospectionClientId = "introspection-client";
+            options.IntrospectionClientSecret = "introspection-secret";
         });
 
         var serviceProvider = services.BuildServiceProvider();

@@ -232,16 +232,7 @@ public class GuardhouseTokenServiceTests
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>(),
-                ItExpr.IsAny<StringContent>())
-            )
-            .Returns(Task.FromResult(response))
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>(),
-                ItExpr.IsAny<StringContent>())
-            )
+                ItExpr.IsAny<CancellationToken>())
             .Returns(Task.FromResult(response));
     }
 
@@ -254,10 +245,7 @@ public class GuardhouseTokenServiceTests
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>(),
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<StringContent>())
-            )
+                ItExpr.IsAny<CancellationToken>())
             .Returns(Task.FromResult(response));
     }
 }
