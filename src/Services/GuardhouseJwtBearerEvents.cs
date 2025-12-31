@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading;
 using System.Threading.Tasks;
 using Guardhouse.SDK.Models;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -1,19 +1,14 @@
 using System;
 using System.Net.Http;
-using System.Threading.Tasks;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using NodaTime;
 using Polly;
-using Polly.Extensions;
-using Polly.Retry;
 
-namespace Guardhouse.SDK;
+namespace Guardhouse.SDK.Extensions;
 
 /// <summary>
 /// Extension methods for configuring Guardhouse SDK services

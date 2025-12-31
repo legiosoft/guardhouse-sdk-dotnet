@@ -22,66 +22,70 @@ jobs:
     name: Build and Test
     outputs:
       version: ${{ steps.version.outputs.version }}
+    defaults:
+      run:
+        working-directory: src
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
         
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src/**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
           
-    - name: Restore dependencies
-      run: dotnet restore
+      - name: Restore dependencies
+        run: dotnet restore
       
-    - name: Determine version
-      id: version
-      run: |
-        if [[ "${{ github.ref }}" == refs/heads/main ]]; then
-          echo "version=1.0.0" >> $GITHUB_OUTPUT
-        elif [[ "${{ github.ref }}" == refs/heads/develop ]]; then
-          echo "version=1.0.0-preview" >> $GITHUB_OUTPUT
-        else
-          VERSION="${{ github.ref_name }}"
-          echo "version=${VERSION#refs/tags/v/}" >> $GITHUB_OUTPUT
-        fi
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            echo "version=1.0.0" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/heads/develop ]]; then
+            echo "version=1.0.0-preview" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ github.ref_name }}"
+            echo "version=${VERSION#refs/tags/v/}" >> $GITHUB_OUTPUT
+          fi
         
-    - name: Build
-      run: dotnet build --no-restore -c Release /p:Version=${{ steps.version.outputs.version }}
+      - name: Build
+        run: dotnet build --no-restore -c Release /p:Version=${{ steps.version.outputs.version }}
       
-    - name: Run Tests
-      run: dotnet test --no-build --logger "console;verbosity=detailed" --results-directory TestResults --collect:"XPlat Code Coverage"
+      - name: Run Tests
+        run: dotnet test --no-build --logger "console;verbosity=detailed" --results-directory ../TestResults --collect:"XPlat Code Coverage"
       
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results
-        path: TestResults/
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ../TestResults/
         
-    - name: Upload coverage reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: coverage-reports
-        path: coverage.xml
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: ../coverage.xml
         
-    - name: Pack
-      run: dotnet pack --no-restore --output nuget /p:Version=${{ steps.version.outputs.version }}
+      - name: Pack
+        run: dotnet pack --no-restore --output ../nuget /p:Version=${{ steps.version.outputs.version }}
       
-    - name: Upload NuGet package
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuget-package
-        path: nuget/
+      - name: Upload NuGet package
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nuget-package
+          path: ../nuget/
 
   release:
     needs: build
@@ -89,11 +93,11 @@ jobs:
     name: Release to NuGet
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: nuget-package
-        path: nuget/
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: ../nuget/
         
-    - name: Publish to NuGet
-      run: dotnet nuget push nuget/*.nupkg --api-key ${{secrets.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+      - name: Publish to NuGet
+        run: dotnet nuget push ../nuget/*.nupkg --api-key ${{secrets.nuget_api_key}} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
