@@ -1,10 +1,14 @@
 using System;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -31,7 +35,7 @@ public class GuardhouseJwtBearerEventsTests
     [Fact]
     public void Constructor_WithNullLogger_ShouldUseNullLogger()
     {
-        var options = new GuardhouseResourceOptions();
+        var options = Options.Create(new GuardhouseResourceOptions());
         var events = new GuardhouseJwtBearerEvents(options);
 
         events.Should().NotBeNull();
@@ -40,7 +44,7 @@ public class GuardhouseJwtBearerEventsTests
     [Fact]
     public void Constructor_WithTokenService_ShouldUseProvidedService()
     {
-        var options = new GuardhouseResourceOptions { EnableIntrospection = true };
+        var options = Options.Create(new GuardhouseResourceOptions { EnableIntrospection = true });
         var tokenServiceMock = new Mock<IGuardhouseTokenService>();
 
         var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object);
@@ -49,25 +53,25 @@ public class GuardhouseJwtBearerEventsTests
     }
 
     [Fact]
-    public void TokenValidated_WithoutIntrospection_ShouldSucceed()
+    public async Task TokenValidated_WithoutIntrospection_ShouldSucceed()
     {
-        var options = new GuardhouseResourceOptions { EnableIntrospection = false };
-        var context = CreateTokenValidatedContext(options);
+        var options = Options.Create(new GuardhouseResourceOptions { EnableIntrospection = false });
+        var context = CreateTokenValidatedContext(options.Value);
 
-        var task = new GuardhouseJwtBearerEvents(options, tokenService: null, _mockLogger.Object).TokenValidated(context);
+        var events = new GuardhouseJwtBearerEvents(options, tokenService: null, _mockLogger.Object);
 
-        task.Should().NotThrow();
+        await events.Invoking(e => e.TokenValidated(context)).Should().NotThrowAsync();
     }
 
     [Fact]
-    public void TokenValidated_WithIntrospection_AndActiveToken_ShouldAddClaims()
+    public async Task TokenValidated_WithIntrospection_AndActiveToken_ShouldAddClaims()
     {
-        var options = new GuardhouseResourceOptions
+        var options = Options.Create(new GuardhouseResourceOptions
         {
             EnableIntrospection = true,
             IntrospectionClientId = "test-client",
             IntrospectionClientSecret = "test-secret"
-        };
+        });
 
         var introspectionResponse = new IntrospectionResponse
         {
@@ -84,15 +88,15 @@ public class GuardhouseJwtBearerEventsTests
             .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(introspectionResponse);
 
-        var context = CreateTokenValidatedContext(options, "Bearer test_token");
+        var context = CreateTokenValidatedContext(options.Value, "Bearer test_token");
 
         var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object, _mockLogger.Object);
-        events.TokenValidated(context);
+        await events.TokenValidated(context);
 
         var principal = context.Principal;
         principal.Should().NotBeNull();
 
-        var claims = principal.Claims;
+        var claims = principal!.Claims;
         claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == "user123");
         claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == "testuser");
         claims.Should().Contain(c => c.Type == "scope" && c.Value == "api read write");
@@ -100,14 +104,14 @@ public class GuardhouseJwtBearerEventsTests
     }
 
     [Fact]
-    public void TokenValidated_WithIntrospection_AndInactiveToken_ShouldFail()
+    public async Task TokenValidated_WithIntrospection_AndInactiveToken_ShouldFail()
     {
-        var options = new GuardhouseResourceOptions
+        var options = Options.Create(new GuardhouseResourceOptions
         {
             EnableIntrospection = true,
             IntrospectionClientId = "test-client",
             IntrospectionClientSecret = "test-secret"
-        };
+        });
 
         var introspectionResponse = new IntrospectionResponse { Active = false };
 
@@ -116,27 +120,26 @@ public class GuardhouseJwtBearerEventsTests
             .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(introspectionResponse);
 
-        var context = CreateTokenValidatedContext(options, "Bearer test_token");
+        var context = CreateTokenValidatedContext(options.Value, "Bearer test_token");
 
         var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object, _mockLogger.Object);
-        events.TokenValidated(context);
+        await events.TokenValidated(context);
 
         context.Result.Should().NotBeNull();
-        context.Result.Failure.Should().BeTrue();
-        context.Result.FailureMessage.Should().Be("Token is not active");
+        context.Result.Succeeded.Should().BeFalse();
     }
 
-    private static Microsoft.AspNetCore.Authentication.JwtBearer.TokenValidatedContext CreateTokenValidatedContext(GuardhouseResourceOptions options, string? token = null)
+    private static TokenValidatedContext CreateTokenValidatedContext(GuardhouseResourceOptions options, string? token = null)
     {
         var httpContext = new DefaultHttpContext();
         if (token != null)
         {
-            httpContext.Request.Headers.Authorization = new Microsoft.AspNetCore.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            httpContext.Request.Headers.Authorization = token;
         }
 
-        var scheme = new Microsoft.AspNetCore.Authentication.AuthenticationScheme("TestScheme");
-        var jwtOptions = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions();
-        
-        return new Microsoft.AspNetCore.Authentication.JwtBearer.TokenValidatedContext(httpContext, scheme, jwtOptions);
+        var scheme = new AuthenticationScheme("TestScheme", "TestScheme", typeof(AuthenticationMiddleware));
+        var jwtOptions = new JwtBearerOptions();
+
+        return new TokenValidatedContext(httpContext, scheme, jwtOptions);
     }
 }

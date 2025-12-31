@@ -30,7 +30,12 @@ public class TokenResponseTests
         var now = SystemClock.Instance.GetCurrentInstant();
         var expected = now.Plus(Duration.FromSeconds(3600));
 
-        token.ExpiresAt.Should().BeCloseTo(expected, Duration.FromSeconds(1));
+        var difference = (token.ExpiresAt - expected);
+        if (difference < Duration.Zero)
+        {
+            difference = -difference;
+        }
+        difference.Should().BeLessThan(Duration.FromSeconds(1));
     }
 
     [Fact]

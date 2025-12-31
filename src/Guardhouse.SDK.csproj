@@ -13,6 +13,7 @@
     <PackageTags>openid;oauth;identity;authentication;authorization;guardhouse;idaas</PackageTags>
     <RepositoryUrl>https://github.com/guardhouse/guardhouse-sdk-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <NoWarn>$(NoWarn);NU1603</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

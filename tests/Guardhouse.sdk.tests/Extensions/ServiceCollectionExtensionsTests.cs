@@ -1,8 +1,11 @@
 using System;
 using FluentAssertions;
+using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -93,12 +96,12 @@ public class ServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         services.AddGuardhouse(
-            clientOptions: co => {
+            configureClientAction: co => {
                 co.Authority = "https://test.com";
                 co.ClientId = "test-client";
                 co.ClientSecret = "test-secret";
             },
-            resourceOptions: ro => {
+            configureResourceAction: ro => {
                 ro.Authority = "https://test.com";
                 ro.Audience = "test-audience";
                 ro.EnableIntrospection = true;
@@ -119,7 +122,7 @@ public class ServiceCollectionExtensionsTests
         });
 
         var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<GuardhouseResilienceOptions>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseResilienceOptions>>().Value;
 
         options.MaxRetryAttempts.Should().Be(5);
         options.RequestTimeoutSeconds.Should().Be(60);

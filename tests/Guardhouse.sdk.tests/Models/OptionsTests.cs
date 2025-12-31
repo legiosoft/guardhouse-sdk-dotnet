@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using FluentAssertions;
+using Guardhouse.SDK.Models;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Models;
@@ -17,13 +19,13 @@ public class OptionsTests
 
         // Missing required fields
         var validationResults = new List<ValidationResult>();
-        
+
         options.Authority = string.Empty;
         options.ClientId = string.Empty;
         options.ClientSecret = string.Empty;
 
         // Should fail validation
-        var isValid = Validator.TryValidateObject(options, out _);
+        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
 
         isValid.Should().BeFalse();
     }
@@ -44,7 +46,8 @@ public class OptionsTests
             MaxRetryAttempts = 3
         };
 
-        var isValid = Validator.TryValidateObject(options, out _);
+        var validationResults = new List<ValidationResult>();
+        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
 
         isValid.Should().BeTrue();
     }
@@ -61,12 +64,14 @@ public class OptionsTests
             IntrospectionClientSecret = "test-secret"
         };
 
+        var validationResults = new List<ValidationResult>();
+
         // Should fail without IntrospectionClientId
-        var isValidWithoutClientId = Validator.TryValidateObject(options, out _);
+        var isValidWithoutClientId = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
         isValidWithoutClientId.Should().BeFalse();
 
         options.IntrospectionClientId = "introspection-client";
-        var isValidWithClientId = Validator.TryValidateObject(options, out _);
+        var isValidWithClientId = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
         isValidWithClientId.Should().BeTrue();
     }
 
