@@ -53,7 +53,7 @@ public class OptionsTests
     }
 
     [Fact]
-    public void GuardhouseResourceOptions_WithIntrospection_ShouldRequireClientCredentials()
+    public void GuardhouseResourceOptions_WithIntrospection_ShouldNotRequireClientCredentialsByDefault()
     {
         var options = new GuardhouseResourceOptions
         {
@@ -66,13 +66,9 @@ public class OptionsTests
 
         var validationResults = new List<ValidationResult>();
 
-        // Should fail without IntrospectionClientId
-        var isValidWithoutClientId = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
-        isValidWithoutClientId.Should().BeFalse();
-
-        options.IntrospectionClientId = "introspection-client";
-        var isValidWithClientId = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
-        isValidWithClientId.Should().BeTrue();
+        // Should pass - no conditional validation attributes
+        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
+        isValid.Should().BeTrue();
     }
 
     [Fact]

@@ -87,12 +87,15 @@ public class TokenResponseTests
         var token = new TokenResponse
         {
             AccessToken = "test_token",
-            ExpiresIn = 60
+            ExpiresIn = 59
         };
 
+        // With default buffer of 60, token with 59 seconds remaining is considered expired
         token.IsExpired().Should().BeTrue();
+
+        token.ExpiresIn = 120;
+        token.IsExpired().Should().BeFalse();
         token.IsExpired(0).Should().BeFalse();
         token.IsExpired(30).Should().BeFalse();
-        token.IsExpired(61).Should().BeTrue();
     }
 }

@@ -99,7 +99,9 @@ public class GuardhouseJwtBearerEventsTests
         var claims = principal!.Claims;
         claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == "user123");
         claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == "testuser");
-        claims.Should().Contain(c => c.Type == "scope" && c.Value == "api read write");
+        claims.Should().Contain(c => c.Type == "scope" && c.Value == "api");
+        claims.Should().Contain(c => c.Type == "scope" && c.Value == "read");
+        claims.Should().Contain(c => c.Type == "scope" && c.Value == "write");
         claims.Should().Contain(c => c.Type == "audience" && c.Value == "test-audience");
     }
 
@@ -137,9 +139,18 @@ public class GuardhouseJwtBearerEventsTests
             httpContext.Request.Headers.Authorization = token;
         }
 
-        var scheme = new AuthenticationScheme("TestScheme", "TestScheme", typeof(AuthenticationMiddleware));
         var jwtOptions = new JwtBearerOptions();
+        var scheme = new AuthenticationScheme("Bearer", "Bearer", typeof(JwtBearerHandler));
 
-        return new TokenValidatedContext(httpContext, scheme, jwtOptions);
+        var claims = new[] { new Claim(ClaimTypes.Name, "testuser") };
+        var identity = new ClaimsIdentity(claims, scheme.Name);
+        var principal = new ClaimsPrincipal(identity);
+
+        var context = new TokenValidatedContext(httpContext, scheme, jwtOptions)
+        {
+            Principal = principal
+        };
+
+        return context;
     }
 }

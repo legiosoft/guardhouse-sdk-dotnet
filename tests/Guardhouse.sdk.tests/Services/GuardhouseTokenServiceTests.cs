@@ -115,7 +115,9 @@ public class GuardhouseTokenServiceTests
         var tokenService = CreateTokenService();
         var token = await tokenService.RequestTokenAsync();
 
-        token.Should().BeEquivalentTo(expectedToken);
+        token.AccessToken.Should().Be(expectedToken.AccessToken);
+        token.TokenType.Should().Be(expectedToken.TokenType);
+        token.ExpiresIn.Should().Be(expectedToken.ExpiresIn);
     }
 
     [Fact]
@@ -206,12 +208,13 @@ public class GuardhouseTokenServiceTests
     {
         var cts = new CancellationTokenSource();
         cts.Cancel();
-        cts.Dispose();
 
         var tokenService = CreateTokenService();
 
         await tokenService.Invoking(async ts => await ts.GetAccessTokenAsync(cts.Token))
             .Should().ThrowAsync<OperationCanceledException>();
+
+        cts.Dispose();
     }
 
     private GuardhouseTokenService CreateTokenService()

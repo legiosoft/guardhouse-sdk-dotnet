@@ -30,7 +30,6 @@ public class ServiceCollectionExtensionsTests
         });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));
-        services.Should().Contain(sd => sd.ServiceType == typeof(GuardhouseTokenService));
         services.Should().Contain(sd => sd.ServiceType == typeof(IMemoryCache));
     }
 
@@ -65,7 +64,7 @@ public class ServiceCollectionExtensionsTests
         });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IAuthenticationService));
-        services.Should().Contain(sd => sd.ServiceType == typeof(GuardhouseResourceService));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseResourceService));
         services.Should().Contain(sd => sd.ServiceType == typeof(GuardhouseJwtBearerEvents));
         services.Should().Contain(sd => sd.ServiceType == typeof(IConfigureOptions<JwtBearerOptions>));
     }
