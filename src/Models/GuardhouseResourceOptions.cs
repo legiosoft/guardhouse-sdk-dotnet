@@ -1,66 +1,40 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace Guardhouse.SDK.Models;
 
-/// <summary>
-/// Configuration for Guardhouse SDK resource server functionality
-/// </summary>
 public class GuardhouseResourceOptions
 {
-    /// <summary>
-    /// The Guardhouse server base URL
-    /// </summary>
     [Required]
     public string Authority { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Audience for token validation
-    /// </summary>
-    public string? Audience { get; set; }
+    [Required]
+    public string Audience { get; set; } = "my_resource_api";
 
-    /// <summary>
-    /// Enable token introspection endpoint validation
-    /// </summary>
-    public bool EnableIntrospection { get; set; } = false;
+    public TokenValidationMode ValidationMode { get; set; } = TokenValidationMode.JwtSignature;
 
-    /// <summary>
-    /// Client ID for introspection endpoint (if enabled)
-    /// </summary>
     public string? IntrospectionClientId { get; set; }
 
-    /// <summary>
-    /// Client secret for introspection endpoint (if enabled)
-    /// </summary>
     public string? IntrospectionClientSecret { get; set; }
 
-    /// <summary>
-    /// Token validation policy name (default: "Guardhouse")
-    /// </summary>
+    public bool EnableIntrospection => ValidationMode == TokenValidationMode.Introspection;
+
     public string PolicyName { get; set; } = "Guardhouse";
 
-    /// <summary>
-    /// Clock skew for token validation (default: 5 minutes)
-    /// </summary>
-    public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(5);
+    public bool ValidateIssuer { get; set; } = Constants.GuardhouseConstants.Validation.ValidateIssuer;
 
-    /// <summary>
-    /// Validate issuer (default: true)
-    /// </summary>
-    public bool ValidateIssuer { get; set; } = true;
+    public bool ValidateAudience { get; set; } = Constants.GuardhouseConstants.Validation.ValidateAudience;
 
-    /// <summary>
-    /// Validate audience (default: true if Audience is specified)
-    /// </summary>
-    public bool ValidateAudience { get; set; } = true;
+    public bool ValidateLifetime { get; set; } = Constants.GuardhouseConstants.Validation.ValidateLifetime;
 
-    /// <summary>
-    /// Validate token lifetime (default: true)
-    /// </summary>
-    public bool ValidateLifetime { get; set; } = true;
+    public bool ValidateIssuerSigningKey { get; set; } = Constants.GuardhouseConstants.Validation.ValidateIssuerSigningKey;
 
-    /// <summary>
-    /// Require HTTPS metadata (default: true for HTTPS authorities)
-    /// </summary>
     public bool? RequireHttpsMetadata { get; set; }
+
+    public int JwksCacheDurationHours { get; set; } = Constants.GuardhouseConstants.Defaults.JwksCacheDurationHours;
+
+    public int JwksRefreshIntervalMinutes { get; set; } = Constants.GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
+
+    public string[] ValidAlgorithms { get; set; } = { Constants.GuardhouseConstants.Algorithms.RS256 };
+
+    public string[] TokenTypes { get; set; } = { Constants.GuardhouseConstants.TokenTypes.Jwt };
 }

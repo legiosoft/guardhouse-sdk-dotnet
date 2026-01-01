@@ -1,12 +1,8 @@
-using System;
-using NodaTime;
 using System.Text.Json.Serialization;
+using NodaTime;
 
 namespace Guardhouse.SDK.Models;
 
-/// <summary>
-/// Represents a token introspection response
-/// </summary>
 public class IntrospectionResponse
 {
     [JsonPropertyName("active")]
@@ -23,6 +19,12 @@ public class IntrospectionResponse
 
     [JsonPropertyName("token_type")]
     public string? TokenType { get; set; }
+
+    [JsonPropertyName("alg")]
+    public string? Algorithm { get; set; }
+
+    [JsonPropertyName("sig")]
+    public string? Signature { get; set; }
 
     [JsonPropertyName("exp")]
     public long? Exp { get; set; }
@@ -45,24 +47,9 @@ public class IntrospectionResponse
     [JsonPropertyName("jti")]
     public string? Jti { get; set; }
 
-    /// <summary>
-    /// Gets the expiration time as NodaTime Instant
-    /// </summary>
     public Instant? ExpiresAt => Exp.HasValue ? Instant.FromUnixTimeSeconds(Exp.Value) : null;
 
-    /// <summary>
-    /// Gets the expiration time as DateTime for compatibility
-    /// </summary>
-    [JsonIgnore]
-    public DateTime? ExpiresAtDateTime => ExpiresAt?.InUtc().ToDateTimeUtc();
-
-    /// <summary>
-    /// Gets the issued at time as NodaTime Instant
-    /// </summary>
     public Instant? IssuedAt => Iat.HasValue ? Instant.FromUnixTimeSeconds(Iat.Value) : null;
 
-    /// <summary>
-    /// Gets the not before time as NodaTime Instant
-    /// </summary>
     public Instant? NotBefore => Nbf.HasValue ? Instant.FromUnixTimeSeconds(Nbf.Value) : null;
 }

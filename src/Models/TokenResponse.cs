@@ -1,12 +1,8 @@
-using System;
-using NodaTime;
 using System.Text.Json.Serialization;
+using NodaTime;
 
 namespace Guardhouse.SDK.Models;
 
-/// <summary>
-/// Represents an OAuth token response
-/// </summary>
 public class TokenResponse
 {
     [JsonPropertyName("access_token")]
@@ -24,20 +20,8 @@ public class TokenResponse
     [JsonPropertyName("scope")]
     public string? Scope { get; set; }
 
-/// <summary>
-    /// Gets expiration time of token using NodaTime
-    /// </summary>
     public Instant ExpiresAt => SystemClock.Instance.GetCurrentInstant().Plus(Duration.FromSeconds(ExpiresIn));
 
-    /// <summary>
-    /// Gets the expiration time as DateTime for compatibility
-    /// </summary>
-    [JsonIgnore]
-    public DateTime ExpiresAtDateTime => ExpiresAt.InUtc().ToDateTimeUtc();
-
-    /// <summary>
-    /// Checks if the token is expired or about to expire using NodaTime
-    /// </summary>
     public bool IsExpired(int bufferSeconds = 60) => 
         SystemClock.Instance.GetCurrentInstant() >= ExpiresAt.Minus(Duration.FromSeconds(bufferSeconds));
 }
