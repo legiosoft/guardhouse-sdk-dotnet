@@ -1,8 +1,8 @@
+namespace Guardhouse.SDK.Services;
+
 using System.Threading;
 using System.Threading.Tasks;
 using Guardhouse.SDK.Models;
-
-namespace Guardhouse.SDK.Services;
 
 public interface IGuardhouseIntrospectionService
 {

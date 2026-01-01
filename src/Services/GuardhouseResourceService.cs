@@ -1,30 +1,20 @@
+namespace Guardhouse.SDK.Services;
+
 using System;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Guardhouse.SDK.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Guardhouse.SDK.Models;
 
-namespace Guardhouse.SDK.Services;
-
-public class GuardhouseResourceService : IGuardhouseResourceService
+public class GuardhouseResourceService(
+    IAuthenticationSchemeProvider schemeProvider,
+    ILogger<GuardhouseResourceService>? logger = null) : IGuardhouseResourceService
 {
-    private readonly IOptions<GuardhouseResourceOptions> _options;
-    private readonly IAuthenticationSchemeProvider _schemeProvider;
-    private readonly ILogger<GuardhouseResourceService> _logger;
-
-    public GuardhouseResourceService(
-        IOptions<GuardhouseResourceOptions> options,
-        IAuthenticationSchemeProvider schemeProvider,
-        ILogger<GuardhouseResourceService>? logger = null)
-    {
-        _options = options;
-        _schemeProvider = schemeProvider;
-        _logger = logger ?? NullLogger<GuardhouseResourceService>.Instance;
-    }
+    private readonly IAuthenticationSchemeProvider _schemeProvider = schemeProvider;
+    private readonly ILogger<GuardhouseResourceService> _logger = logger ?? NullLogger<GuardhouseResourceService>.Instance;
 
     public async Task<ClaimsPrincipal?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default)
     {
@@ -47,6 +37,7 @@ public class GuardhouseResourceService : IGuardhouseResourceService
             {
                 _logger.LogError("No default authentication scheme found");
             }
+
             return scheme;
         }
         catch (Exception ex)

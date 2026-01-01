@@ -1,69 +1,53 @@
+namespace Guardhouse.SDK.Services;
+
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Guardhouse.SDK.Constants;
+using Guardhouse.SDK.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Polly;
 using NodaTime;
-using Guardhouse.SDK.Models;
-using Guardhouse.SDK.Constants;
+using Polly;
 
-namespace Guardhouse.SDK.Services;
-
-public class GuardhouseTokenService : IGuardhouseTokenService
+public class GuardhouseTokenService(
+    HttpClient httpClient,
+    IMemoryCache memoryCache,
+    IOptions<GuardhouseClientOptions> options,
+    ILogger<GuardhouseTokenService> logger,
+    IClock? clock = null) : IGuardhouseTokenService
 {
-    private readonly HttpClient _httpClient;
-    private readonly IMemoryCache _memoryCache;
-    private readonly IOptions<GuardhouseClientOptions> _options;
-    private readonly ILogger<GuardhouseTokenService> _logger;
-    private readonly IClock _clock;
-    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IOptions<GuardhouseClientOptions> _options = options;
+    private readonly ILogger<GuardhouseTokenService> _logger = logger;
+    private readonly IClock _clock = clock ?? SystemClock.Instance;
+
+    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = options.Value.EnableHttpResilience
+        ? Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .OrResult(msg => !msg.IsSuccessStatusCode)
+            .WaitAndRetryAsync(
+                options.Value.MaxRetryAttempts,
+                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)),
+                onRetry: (outcome, timespan, retryAttempt, context) =>
+                {
+                    logger.LogWarning(
+                        "Request failed with {StatusCode}. Retrying in {Delay}s (attempt {Attempt}/{MaxAttempts})",
+                        outcome.Result?.StatusCode,
+                        timespan.TotalSeconds,
+                        retryAttempt,
+                        options.Value.MaxRetryAttempts);
+                })
+        : Policy.NoOpAsync<HttpResponseMessage>();
 
     private const string TokenCacheKey = "guardhouse_access_token";
     private const string RefreshTokenCacheKey = "guardhouse_refresh_token";
-
-    public GuardhouseTokenService(
-        HttpClient httpClient,
-        IMemoryCache memoryCache,
-        IOptions<GuardhouseClientOptions> options,
-        ILogger<GuardhouseTokenService> logger,
-        IClock? clock = null)
-    {
-        _httpClient = httpClient;
-        _memoryCache = memoryCache;
-        _options = options;
-        _logger = logger;
-        _clock = clock ?? SystemClock.Instance;
-
-        var clientOptions = options.Value;
-        if (clientOptions.EnableHttpResilience)
-        {
-            _retryPolicy = Policy<HttpResponseMessage>
-                .Handle<HttpRequestException>()
-                .OrResult(msg => !msg.IsSuccessStatusCode)
-                .WaitAndRetryAsync(
-                    clientOptions.MaxRetryAttempts,
-                    retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)),
-                    onRetry: (outcome, timespan, retryAttempt, context) =>
-                    {
-                        _logger.LogWarning(
-                            "Request failed with {StatusCode}. Retrying in {Delay}s (attempt {Attempt}/{MaxAttempts})",
-                            outcome.Result?.StatusCode,
-                            timespan.TotalSeconds,
-                            retryAttempt,
-                            clientOptions.MaxRetryAttempts);
-                    });
-        }
-        else
-        {
-            _retryPolicy = Policy.NoOpAsync<HttpResponseMessage>();
-        }
-    }
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
@@ -105,13 +89,12 @@ public class GuardhouseTokenService : IGuardhouseTokenService
         var tokenEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        request.Content = new FormUrlEncodedContent(new[]
-        {
+        request.Content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("client_id", options.ClientId),
             new KeyValuePair<string, string>("client_secret", options.ClientSecret),
             new KeyValuePair<string, string>("grant_type", "client_credentials"),
             new KeyValuePair<string, string>("scope", options.Scope)
-        });
+        ]);
 
         _logger.LogDebug("Requesting new token from {TokenEndpoint}", tokenEndpoint);
 
@@ -141,13 +124,12 @@ public class GuardhouseTokenService : IGuardhouseTokenService
         var tokenEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        request.Content = new FormUrlEncodedContent(new[]
-        {
+        request.Content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("client_id", options.ClientId),
             new KeyValuePair<string, string>("client_secret", options.ClientSecret),
             new KeyValuePair<string, string>("grant_type", "refresh_token"),
             new KeyValuePair<string, string>("refresh_token", refreshToken)
-        });
+        ]);
 
         _logger.LogDebug("Refreshing token from {TokenEndpoint}", tokenEndpoint);
 
@@ -177,12 +159,11 @@ public class GuardhouseTokenService : IGuardhouseTokenService
         var introspectionEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-        request.Content = new FormUrlEncodedContent(new[]
-        {
+        request.Content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("client_id", options.ClientId),
             new KeyValuePair<string, string>("client_secret", options.ClientSecret),
             new KeyValuePair<string, string>("token", token)
-        });
+        ]);
 
         _logger.LogDebug("Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
 

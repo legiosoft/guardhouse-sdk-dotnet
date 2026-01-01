@@ -1,7 +1,7 @@
+namespace Guardhouse.SDK.Models;
+
 using System.Text.Json.Serialization;
 using NodaTime;
-
-namespace Guardhouse.SDK.Models;
 
 public class TokenResponse
 {
@@ -22,6 +22,8 @@ public class TokenResponse
 
     public Instant ExpiresAt => SystemClock.Instance.GetCurrentInstant().Plus(Duration.FromSeconds(ExpiresIn));
 
-    public bool IsExpired(int bufferSeconds = 60) => 
-        SystemClock.Instance.GetCurrentInstant() >= ExpiresAt.Minus(Duration.FromSeconds(bufferSeconds));
+    public bool IsExpired(int bufferSeconds = 60)
+    {
+        return SystemClock.Instance.GetCurrentInstant() >= ExpiresAt.Minus(Duration.FromSeconds(bufferSeconds));
+    }
 }

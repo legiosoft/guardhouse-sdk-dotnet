@@ -1,46 +1,38 @@
+namespace Guardhouse.SDK.Services;
+
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Guardhouse.SDK.Constants;
+using Guardhouse.SDK.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Guardhouse.SDK.Models;
-using Guardhouse.SDK.Constants;
 
-namespace Guardhouse.SDK.Services;
-
-internal class GuardhouseIntrospectionJwtBearerEvents : JwtBearerEvents
+internal class GuardhouseIntrospectionJwtBearerEvents(
+    IOptions<GuardhouseResourceOptions> options,
+    IGuardhouseIntrospectionService introspectionService,
+    ILogger<GuardhouseIntrospectionJwtBearerEvents>? logger = null) : JwtBearerEvents
 {
-    private readonly IOptions<GuardhouseResourceOptions> _options;
-    private readonly IGuardhouseIntrospectionService _introspectionService;
-    private readonly ILogger<GuardhouseIntrospectionJwtBearerEvents> _logger;
-
-    public GuardhouseIntrospectionJwtBearerEvents(
-        IOptions<GuardhouseResourceOptions> options,
-        IGuardhouseIntrospectionService introspectionService,
-        ILogger<GuardhouseIntrospectionJwtBearerEvents>? logger = null)
-    {
-        _options = options;
-        _introspectionService = introspectionService;
-        _logger = logger ?? NullLogger<GuardhouseIntrospectionJwtBearerEvents>.Instance;
-    }
+    private readonly IOptions<GuardhouseResourceOptions> _options = options;
+    private readonly IGuardhouseIntrospectionService _introspectionService = introspectionService;
+    private readonly ILogger<GuardhouseIntrospectionJwtBearerEvents> _logger = logger ?? NullLogger<GuardhouseIntrospectionJwtBearerEvents>.Instance;
 
     public override async Task TokenValidated(TokenValidatedContext context)
     {
         var token = context.HttpContext.Request.Headers[GuardhouseConstants.Headers.Authorization].ToString();
         if (token.StartsWith(GuardhouseConstants.Headers.BearerPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            token = token.Substring(GuardhouseConstants.Headers.BearerPrefix.Length);
+            token = token[GuardhouseConstants.Headers.BearerPrefix.Length..];
         }
 
         try
         {
-            var jwtToken = context.SecurityToken as JwtSecurityToken;
-            if (jwtToken != null)
+            if (context.SecurityToken is JwtSecurityToken jwtToken)
             {
                 var typ = jwtToken.Header.Typ;
                 if (!string.IsNullOrEmpty(typ) && !_options.Value.TokenTypes.Contains(typ))
@@ -68,7 +60,7 @@ internal class GuardhouseIntrospectionJwtBearerEvents : JwtBearerEvents
                 return;
             }
 
-            if (!string.IsNullOrEmpty(introspectionResult.TokenType) && 
+            if (!string.IsNullOrEmpty(introspectionResult.TokenType) &&
                 !_options.Value.TokenTypes.Contains(introspectionResult.TokenType))
             {
                 _logger.LogWarning("Token rejected: introspection returned type '{TokenType}' which is not allowed", introspectionResult.TokenType);
@@ -76,7 +68,7 @@ internal class GuardhouseIntrospectionJwtBearerEvents : JwtBearerEvents
                 return;
             }
 
-            if (!string.IsNullOrEmpty(introspectionResult.Algorithm) && 
+            if (!string.IsNullOrEmpty(introspectionResult.Algorithm) &&
                 !_options.Value.ValidAlgorithms.Contains(introspectionResult.Algorithm))
             {
                 _logger.LogWarning("Token rejected: introspection returned algorithm '{Algorithm}' which is not allowed", introspectionResult.Algorithm);

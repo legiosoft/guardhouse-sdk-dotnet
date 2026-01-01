@@ -1,7 +1,7 @@
+namespace Guardhouse.SDK.Models;
+
 using System.Text.Json.Serialization;
 using NodaTime;
-
-namespace Guardhouse.SDK.Models;
 
 public class IntrospectionResponse
 {

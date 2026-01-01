@@ -1,40 +1,44 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Guardhouse.SDK.Models;
+
+using System.ComponentModel.DataAnnotations;
+using Guardhouse.SDK.Constants;
+using Guardhouse.SDK.Models.Validation;
 
 public class GuardhouseResourceOptions
 {
-    [Required]
+    [Required(ErrorMessage = "Authority is required")]
     public string Authority { get; set; } = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = "Audience is required")]
     public string Audience { get; set; } = "my_resource_api";
 
     public TokenValidationMode ValidationMode { get; set; } = TokenValidationMode.JwtSignature;
 
+    [RequiredIfIntrospection(ErrorMessage = "IntrospectionClientId is required when ValidationMode is Introspection")]
     public string? IntrospectionClientId { get; set; }
 
+    [RequiredIfIntrospection(ErrorMessage = "IntrospectionClientSecret is required when ValidationMode is Introspection")]
     public string? IntrospectionClientSecret { get; set; }
 
     public bool EnableIntrospection => ValidationMode == TokenValidationMode.Introspection;
 
     public string PolicyName { get; set; } = "Guardhouse";
 
-    public bool ValidateIssuer { get; set; } = Constants.GuardhouseConstants.Validation.ValidateIssuer;
+    public bool ValidateIssuer { get; set; } = GuardhouseConstants.Validation.ValidateIssuer;
 
-    public bool ValidateAudience { get; set; } = Constants.GuardhouseConstants.Validation.ValidateAudience;
+    public bool ValidateAudience { get; set; } = GuardhouseConstants.Validation.ValidateAudience;
 
-    public bool ValidateLifetime { get; set; } = Constants.GuardhouseConstants.Validation.ValidateLifetime;
+    public bool ValidateLifetime { get; set; } = GuardhouseConstants.Validation.ValidateLifetime;
 
-    public bool ValidateIssuerSigningKey { get; set; } = Constants.GuardhouseConstants.Validation.ValidateIssuerSigningKey;
+    public bool ValidateIssuerSigningKey { get; set; } = GuardhouseConstants.Validation.ValidateIssuerSigningKey;
 
     public bool? RequireHttpsMetadata { get; set; }
 
-    public int JwksCacheDurationHours { get; set; } = Constants.GuardhouseConstants.Defaults.JwksCacheDurationHours;
+    public int JwksCacheDurationHours { get; set; } = GuardhouseConstants.Defaults.JwksCacheDurationHours;
 
-    public int JwksRefreshIntervalMinutes { get; set; } = Constants.GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
+    public int JwksRefreshIntervalMinutes { get; set; } = GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
 
-    public string[] ValidAlgorithms { get; set; } = { Constants.GuardhouseConstants.Algorithms.RS256 };
+    public string[] ValidAlgorithms { get; set; } = [GuardhouseConstants.Algorithms.RS256];
 
-    public string[] TokenTypes { get; set; } = { Constants.GuardhouseConstants.TokenTypes.Jwt };
+    public string[] TokenTypes { get; set; } = [GuardhouseConstants.TokenTypes.Jwt];
 }

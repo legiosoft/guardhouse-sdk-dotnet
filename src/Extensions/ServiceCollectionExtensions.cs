@@ -1,3 +1,5 @@
+namespace Guardhouse.SDK.Extensions;
+
 using System;
 using System.Net.Http;
 using Guardhouse.SDK.Constants;
@@ -8,8 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Polly;
-
-namespace Guardhouse.SDK.Extensions;
 
 public static class ServiceCollectionExtensions
 {
@@ -58,6 +58,10 @@ public static class ServiceCollectionExtensions
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
         }
+
+        services.AddOptions<GuardhouseResourceOptions>()
+            .Validate(ValidateGuardhouseResourceOptions)
+            .ValidateOnStart();
 
         services.AddMemoryCache();
 
@@ -112,6 +116,42 @@ public static class ServiceCollectionExtensions
             options.Authority = authority;
             options.Audience = audience ?? "my_resource_api";
         });
+    }
+
+    private static bool ValidateGuardhouseResourceOptions(GuardhouseResourceOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Authority))
+        {
+            throw new OptionsValidationException("Guardhouse Resource: Authority is required.", typeof(GuardhouseResourceOptions), ["Authority"]);
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Audience))
+        {
+            throw new OptionsValidationException("Guardhouse Resource: Audience is required.", typeof(GuardhouseResourceOptions), ["Audience"]);
+        }
+
+        if (options.ValidationMode == TokenValidationMode.Introspection)
+        {
+            if (string.IsNullOrWhiteSpace(options.IntrospectionClientId))
+            {
+                throw new OptionsValidationException(
+                    "Guardhouse Resource: IntrospectionClientId is required when ValidationMode is set to Introspection. " +
+                    "Please configure IntrospectionClientId and IntrospectionClientSecret for introspection-based token validation.",
+                    typeof(GuardhouseResourceOptions),
+                    ["IntrospectionClientId"]);
+            }
+
+            if (string.IsNullOrWhiteSpace(options.IntrospectionClientSecret))
+            {
+                throw new OptionsValidationException(
+                    "Guardhouse Resource: IntrospectionClientSecret is required when ValidationMode is set to Introspection. " +
+                    "Please configure IntrospectionClientId and IntrospectionClientSecret for introspection-based token validation.",
+                    typeof(GuardhouseResourceOptions),
+                    ["IntrospectionClientSecret"]);
+            }
+        }
+
+        return true;
     }
 
     private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
