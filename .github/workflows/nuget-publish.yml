@@ -43,7 +43,9 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
             echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
           else
-            echo "version=${GITHUB_REF_NAME#refs/tags/v/}" >> $GITHUB_OUTPUT
+            VERSION="${GITHUB_REF_NAME}"
+            VERSION=$(echo "$VERSION" | sed 's|refs/tags/v||' | sed 's|^v||')
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
           fi
       
       - name: Build
