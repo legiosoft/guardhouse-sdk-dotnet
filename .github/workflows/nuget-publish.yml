@@ -35,6 +35,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
         
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src/**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+           
       - name: Restore dependencies
         run: dotnet restore
       
@@ -48,18 +56,18 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
             echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
           else
-            VERSION=$(echo "${{ github.ref_name }}" | sed 's|refs/tags/v/||')
+            VERSION=${GITHUB_REF_NAME#refs/tags/v/}
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
           fi
       
       - name: Build
-        run: dotnet build --no-restore -c Release -p:Version="${{ steps.version.outputs.version }}"
+        run: dotnet build --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
       
       - name: Run Tests
         run: dotnet test --no-build --logger "console;verbosity=detailed"
       
       - name: Pack
-        run: dotnet pack --no-restore -c Release -p:Version="${{ steps.version.outputs.version }}" --output nuget/
+        run: dotnet pack --no-restore -c Release -p:Version=${{ steps.version.outputs.version }} --output nuget/
       
       - name: Upload NuGet package
         uses: actions/upload-artifact@v4
@@ -92,8 +100,6 @@ jobs:
       
       - name: Publish to NuGet
         working-directory: src/nuget
-        run: |
-          ls *.nupkg
-          dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+        run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
         env:
           GH_TOKEN: ${{ github.token }}
