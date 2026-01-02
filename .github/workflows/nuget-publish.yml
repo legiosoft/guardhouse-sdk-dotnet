@@ -35,14 +35,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
         
-      - name: Cache NuGet packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('src/**/*.csproj', '**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-           
       - name: Restore dependencies
         run: dotnet restore
       
@@ -56,42 +48,25 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
             echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
           else
-            VERSION=$(echo "${{ github.ref_name }}" | sed 's|refs/tags/v/||' | sed 's|^v||')
+            VERSION=$(echo "${{ github.ref_name }}" | sed 's|refs/tags/v/||')
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
           fi
-          
+      
       - name: Build
-        run: dotnet build --no-restore -c Release /p:Version="${{ steps.version.outputs.version }}"
+        run: dotnet build --no-restore -c Release -p:Version="${{ steps.version.outputs.version }}"
       
       - name: Run Tests
-        run: dotnet test --no-build --logger "console;verbosity=detailed" --results-directory TestResults --collect:"XPlat Code Coverage"
+        run: dotnet test --no-build --logger "console;verbosity=detailed"
       
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: TestResults/
-          
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-reports
-          path: coverage.xml
-          
       - name: Pack
-        run: dotnet pack --no-restore --output nuget/ /p:Version="${{ steps.version.outputs.version }}"
-      
-      - name: List nuget directory
-        run: ls -la nuget/
+        run: dotnet pack --no-restore -c Release -p:Version="${{ steps.version.outputs.version }}" --output nuget/
       
       - name: Upload NuGet package
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: nuget-package
-          path: nuget/
+          path: src/nuget/
+          if-no-files-found: error
   
   release:
     needs: build
@@ -101,13 +76,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Download artifacts
-        run: |
-          echo "Downloading artifact..."
-          gh artifact download nuget-package --dir .
-      - name: List downloaded files
+        with:
+          sparse-checkout: true
+          sparse-checkout-paths: src/nuget/
+      
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: src/nuget/
+      
+      - name: List NuGet files
+        working-directory: src/nuget
         run: ls -la
+      
       - name: Publish to NuGet
-        run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+        working-directory: src/nuget
+        run: |
+          ls *.nupkg
+          dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
         env:
           GH_TOKEN: ${{ github.token }}
