@@ -3,6 +3,8 @@ namespace Guardhouse.SDK.Services;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,10 +36,12 @@ public class GuardhouseIntrospectionService(
         if (string.IsNullOrEmpty(resourceOptions.IntrospectionClientId) ||
             string.IsNullOrEmpty(resourceOptions.IntrospectionClientSecret))
         {
-            throw new InvalidOperationException("Introspection is enabled but IntrospectionClientId and IntrospectionClientSecret are not configured.");
+            throw new InvalidOperationException("Introspection is enabled but " +
+                                                "IntrospectionClientId and IntrospectionClientSecret " +
+                                                "are not configured.");
         }
 
-        var cacheKey = $"{IntrospectionCacheKeyPrefix}{token}";
+        var cacheKey = $"{IntrospectionCacheKeyPrefix}{GetTokenHash(token)}";
         if (_memoryCache.TryGetValue(cacheKey, out IntrospectionResponse? cachedResult) && cachedResult != null)
         {
             _logger.LogDebug("Using cached introspection result");
@@ -49,10 +53,13 @@ public class GuardhouseIntrospectionService(
         using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Basic",
-            Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(
                 $"{resourceOptions.IntrospectionClientId}:{resourceOptions.IntrospectionClientSecret}")));
 
-        request.Content = new FormUrlEncodedContent([new KeyValuePair<string, string>("token", token)]);
+        request.Content = new FormUrlEncodedContent([
+            new KeyValuePair<string, string>("token", token),
+            new KeyValuePair<string, string>("token_type_hint", "access_token")
+        ]);
 
         _logger.LogDebug("Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
 
@@ -69,17 +76,22 @@ public class GuardhouseIntrospectionService(
 
         if (introspectionResponse.Active)
         {
-            var cacheExpiration = introspectionResponse.ExpiresAt.HasValue
-                ? introspectionResponse.ExpiresAt.Value.Minus(SystemClock.Instance.GetCurrentInstant()).ToTimeSpan()
-                : TimeSpan.FromMinutes(5);
-
-            if (cacheExpiration > TimeSpan.Zero)
+            var cacheTtl = TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds);
+            if (cacheTtl > TimeSpan.Zero)
             {
-                _memoryCache.Set(cacheKey, introspectionResponse, cacheExpiration);
-                _logger.LogDebug("Cached introspection result for {CacheExpiration}", cacheExpiration);
+                _memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
+                _logger.LogDebug("Cached introspection result for {CacheTtl}", cacheTtl);
             }
         }
 
         return introspectionResponse;
+    }
+
+    private static string GetTokenHash(string token)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

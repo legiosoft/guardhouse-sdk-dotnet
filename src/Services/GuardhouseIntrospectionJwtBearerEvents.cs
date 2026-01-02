@@ -1,6 +1,7 @@
 namespace Guardhouse.SDK.Services;
 
 using System.Collections.Generic;
+using System.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -61,7 +62,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             var identity = new ClaimsIdentity(claims, context.Scheme.Name, ClaimTypes.Name, ClaimTypes.Role);
             context.Principal = new ClaimsPrincipal(identity);
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Token introspection failed");
             context.Fail("Token introspection failed");
@@ -74,9 +75,11 @@ public class GuardhouseIntrospectionJwtBearerEvents(
     private static List<Claim> BuildClaimsFromIntrospection(IntrospectionResponse introspectionResult)
     {
         var claims = new List<Claim>();
+        var roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (!string.IsNullOrEmpty(introspectionResult.Sub))
         {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, introspectionResult.Sub));
             claims.Add(new Claim(GuardhouseConstants.JwtClaims.Subject, introspectionResult.Sub));
         }
 
@@ -87,16 +90,21 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (!string.IsNullOrEmpty(introspectionResult.Role))
         {
-            claims.Add(new Claim(ClaimTypes.Role, introspectionResult.Role));
+            roles.Add(introspectionResult.Role);
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Roles))
         {
-            var roles = introspectionResult.Roles.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var role in roles)
+            var roleArray = introspectionResult.Roles.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var role in roleArray)
             {
-                claims.Add(new Claim(ClaimTypes.Role, role));
+                roles.Add(role);
             }
+        }
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Scope))
@@ -115,7 +123,11 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (!string.IsNullOrEmpty(introspectionResult.Aud))
         {
-            claims.Add(new Claim(GuardhouseConstants.JwtClaims.Audience, introspectionResult.Aud));
+            var audiences = introspectionResult.Aud.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var audience in audiences)
+            {
+                claims.Add(new Claim(GuardhouseConstants.JwtClaims.Audience, audience));
+            }
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Iss))

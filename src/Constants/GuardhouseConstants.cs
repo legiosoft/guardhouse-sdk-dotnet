@@ -54,6 +54,7 @@ public static class GuardhouseConstants
         public const int MaxRetryAttempts = 3;
         public const double ClockSkewMinutes = 5.0;
         public const string DefaultScope = "api";
+        public const int IntrospectionCacheTtlSeconds = 60;
     }
 
     public static class Validation

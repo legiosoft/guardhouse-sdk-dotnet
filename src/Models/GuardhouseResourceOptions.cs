@@ -38,6 +38,8 @@ public class GuardhouseResourceOptions
 
     public int JwksRefreshIntervalMinutes { get; set; } = GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
 
+    public int IntrospectionCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionCacheTtlSeconds;
+
     public string[] ValidAlgorithms { get; set; } = [GuardhouseConstants.Algorithms.RS256];
 
     public string[] TokenTypes { get; set; } = [GuardhouseConstants.TokenTypes.Jwt];

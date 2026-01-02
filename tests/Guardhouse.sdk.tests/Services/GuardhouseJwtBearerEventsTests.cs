@@ -229,6 +229,74 @@ public class GuardhouseJwtBearerEventsTests
         principal?.IsInRole("Viewer").Should().BeTrue();
     }
 
+    [Fact]
+    public async Task TokenValidated_PreventsDuplicateRoles()
+    {
+        var context = CreateTokenValidatedContext(token: "token_with_duplicate_roles");
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("token_with_duplicate_roles", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Role = "Admin",
+                Roles = "Admin Editor Admin Viewer"
+            });
+
+        await _events.TokenValidated(context);
+
+        var principal = context.Principal;
+        principal.Should().NotBeNull();
+        var roleClaims = principal?.FindAll(ClaimTypes.Role).ToList();
+        roleClaims.Should().HaveCount(3);
+        roleClaims.Should().OnlyContain(c => new[] { "Admin", "Editor", "Viewer" }.Contains(c.Value));
+    }
+
+    [Fact]
+    public async Task TokenValidated_MapsSubjectToNameIdentifier()
+    {
+        var context = CreateTokenValidatedContext(token: "token_with_sub");
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("token_with_sub", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user123"
+            });
+
+        await _events.TokenValidated(context);
+
+        var principal = context.Principal;
+        principal.Should().NotBeNull();
+        principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value.Should().Be("user123");
+        principal?.FindFirst(GuardhouseConstants.JwtClaims.Subject)?.Value.Should().Be("user123");
+    }
+
+    [Fact]
+    public async Task TokenValidated_MapsMultipleAudiences()
+    {
+        var context = CreateTokenValidatedContext(token: "token_with_audiences");
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("token_with_audiences", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Aud = "api1 api2 api3"
+            });
+
+        await _events.TokenValidated(context);
+
+        var principal = context.Principal;
+        principal.Should().NotBeNull();
+        var audienceClaims = principal?.FindAll(GuardhouseConstants.JwtClaims.Audience).ToList();
+        audienceClaims.Should().HaveCount(3);
+        audienceClaims.Should().OnlyContain(c => new[] { "api1", "api2", "api3" }.Contains(c.Value));
+    }
+
     #endregion
 
     private static TokenValidatedContext CreateTokenValidatedContext(string token)

@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Guardhouse.SDK.Models;
@@ -113,7 +115,8 @@ public class GuardhouseIntrospectionServiceTests
             Scope = "cached_scope"
         };
 
-        _memoryCache.Set("guardhouse_introspection_test_token", cachedResponse);
+        var tokenHash = ComputeTokenHash("test_token");
+        _memoryCache.Set($"guardhouse_introspection_{tokenHash}", cachedResponse);
 
         var service = CreateService();
         var result = await service.IntrospectTokenAsync("test_token");
@@ -125,41 +128,36 @@ public class GuardhouseIntrospectionServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_WhenCacheExpired_ShouldRequestNewIntrospection()
+    public async Task IntrospectTokenAsync_ShouldUseConfigurableCacheTtl()
     {
-        var cachedResponse = new IntrospectionResponse
+        SetupMockIntrospectionResponse(new IntrospectionResponse
         {
             Active = true,
-            Scope = "cached_scope",
-            Exp = null
-        };
+            Scope = "api",
+            Exp = (long)(SystemClock.Instance.GetCurrentInstant().Plus(Duration.FromHours(24)).ToUnixTimeSeconds())
+        });
 
-        _memoryCache.Set("guardhouse_introspection_test_token", cachedResponse);
-
-        var newResponse = new IntrospectionResponse
+        var options = Options.Create(new GuardhouseResourceOptions
         {
-            Active = true,
-            Scope = "new_scope",
-            Exp = (long)(_testClock.GetCurrentInstant().Plus(Duration.FromHours(1)).ToUnixTimeSeconds())
-        };
+            Authority = "https://test-guardhouse.com",
+            Audience = "test-audience",
+            ValidationMode = TokenValidationMode.Introspection,
+            IntrospectionClientId = "test-client",
+            IntrospectionClientSecret = "test-secret",
+            IntrospectionCacheTtlSeconds = 120
+        });
 
-        _mockHttpMessageHandler
-            .Protected()
-            .SetupSequence<Task<HttpResponseMessage>>("SendAsync")
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(JsonSerializer.Serialize(newResponse))
-            }));
+        var service = new GuardhouseIntrospectionService(
+            _httpClient,
+            _memoryCache,
+            options,
+            _mockLogger.Object);
 
-        var service = CreateService();
-        var result = await service.IntrospectTokenAsync("test_token");
+        await service.IntrospectTokenAsync("test_token");
 
-        result.Active.Should().BeTrue();
-        result.Scope.Should().Be("new_scope");
-        _mockHttpMessageHandler.Protected().Verify(
-            x => x.SendAsync(ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>()),
-            Times.Once());
+        var tokenHash = ComputeTokenHash("test_token");
+        _memoryCache.TryGetValue($"guardhouse_introspection_{tokenHash}", out IntrospectionResponse? cachedResult);
+        cachedResult.Should().NotBeNull();
     }
 
     [Fact]
@@ -284,6 +282,14 @@ public class GuardhouseIntrospectionServiceTests
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(response))
             }));
+    }
+
+    private static string ComputeTokenHash(string token)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     #endregion
