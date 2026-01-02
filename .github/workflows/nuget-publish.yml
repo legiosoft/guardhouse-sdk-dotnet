@@ -13,19 +13,14 @@ on:
       - '**/.gitignore'
       - 'LICENSE'
 
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build and Test
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         working-directory: src
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,66 +30,46 @@ jobs:
         with:
           dotnet-version: '8.0.x'
         
-      - name: Cache NuGet packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('src/**/*.csproj', '**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-           
-      - name: Restore dependencies
+      - name: Restore
         run: dotnet restore
       
       - name: Determine version
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/heads/main ]]; then
-            echo version=1.0.0 >> $GITHUB_OUTPUT
+            echo "version=1.0.0" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/heads/develop ]]; then
-            echo version=1.0.0-preview >> $GITHUB_OUTPUT
+            echo "version=1.0.0-preview" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
-            echo version=1.0.0-dev >> $GITHUB_OUTPUT
+            echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
           else
-            echo version=${GITHUB_REF_NAME:1} >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF_NAME#refs/tags/v/}" >> $GITHUB_OUTPUT
           fi
       
       - name: Build
         run: dotnet build --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
       
-      - name: Run Tests
-        run: dotnet test --no-build --logger "console;verbosity=detailed"
-      
       - name: Pack
-        run: dotnet pack --no-restore -c Release -p:Version=${{ steps.version.outputs.version }} --output nuget/
+        run: dotnet pack -c Release -p:Version=${{ steps.version.outputs.version }} -o nuget/
       
-      - name: Upload NuGet package
+      - name: Run Tests
+        run: dotnet test --no-build
+      
+      - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-package
+          name: nuget
           path: src/nuget/
-          if-no-files-found: error
-  
+
   release:
-    needs: build
     runs-on: ubuntu-latest
-    name: Release to NuGet
+    needs: build
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: true
-          sparse-checkout-paths: src/nuget/
-      
-      - name: Download Artifacts
+      - name: Download
         uses: actions/download-artifact@v4
         with:
-          name: nuget-package
-          path: src/nuget/
+          name: nuget
       
-      - name: Publish to NuGet
-        working-directory: src/nuget
-        run: dotnet nuget push Guardhouse.SDK.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Push to NuGet
+        run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
