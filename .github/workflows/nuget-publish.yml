@@ -50,14 +50,14 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/heads/main ]]; then
-            echo "version=1.0.0" >> $GITHUB_OUTPUT
+            echo version=1.0.0 >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/heads/develop ]]; then
-            echo "version=1.0.0-preview" >> $GITHUB_OUTPUT
+            echo version=1.0.0-preview >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
-            echo "version=1.0.0-dev" >> $GITHUB_OUTPUT
+            echo version=1.0.0-dev >> $GITHUB_OUTPUT
           else
             VERSION=${GITHUB_REF_NAME#refs/tags/v/}
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo version=${VERSION} >> $GITHUB_OUTPUT
           fi
       
       - name: Build
@@ -93,10 +93,6 @@ jobs:
         with:
           name: nuget-package
           path: src/nuget/
-      
-      - name: List NuGet files
-        working-directory: src/nuget
-        run: ls -la
       
       - name: Publish to NuGet
         working-directory: src/nuget
