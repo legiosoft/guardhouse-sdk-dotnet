@@ -1,75 +1,84 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    
-    <PackageId>Guardhouse.SDK</PackageId>
-    <Version>1.0.0-beta2</Version>
-    <PackageVersion>1.0.0-beta2</PackageVersion>
-    <PackageAuthors>LEGIOSOFT SOLUTIONS S.L.</PackageAuthors>
-    <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
-    <Product>Guardhouse SDK</Product>
-    <Copyright>Copyright (c) LEGIOSOFT SOLUTIONS S.L. 2026</Copyright>
-    <Description>Official .NET SDK for https://guardhouse.cloud platform. Use it for .NET clients when you already configured everything in Guardhouse Cloud.</Description>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://guardhouse.cloud</PackageProjectUrl>
-    <PackageIconUrl>https://raw.githubusercontent.com/legiosoft/guardhouse-sdk-dotnet/refs/heads/dev/icon.png</PackageIconUrl>
+    <PropertyGroup>
+        <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
 
-    <PackageReleaseNotes>
-Beta release - First public release of Guardhouse SDK for .NET.
+        <PackageId>Guardhouse.SDK</PackageId>
+        <Version>1.0.0-beta2</Version>
+        <PackageVersion>1.0.0-beta2</PackageVersion>
+        <PackageAuthors>LEGIOSOFT SOLUTIONS S.L.</PackageAuthors>
+        <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
+        <Product>Guardhouse SDK</Product>
+        <Copyright>Copyright (c) LEGIOSOFT SOLUTIONS S.L. 2026</Copyright>
+        <Description>Official .NET SDK for https://guardhouse.cloud platform. Use it for .NET clients when you already configured everything in Guardhouse Cloud.</Description>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <PackageProjectUrl>https://guardhouse.cloud</PackageProjectUrl>
+        <PackageIconUrl>https://raw.githubusercontent.com/legiosoft/guardhouse-sdk-dotnet/refs/heads/dev/icon.png</PackageIconUrl>
 
-Features:
-- JWT signature validation with JWKS caching and lazy refresh
-- Token introspection support (RFC 7662)
-- Comprehensive security validations (algorithm, token type, issuer, audience, lifetime)
-- Configurable validation modes (JWT Signature or Introspection)
-- Client credentials flow support
-- HTTP resilience and retry policies
-- Configuration validation with clear error messages
-    </PackageReleaseNotes>
-    <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation</PackageTags>
-    
-    <RepositoryUrl>https://github.com/legiosoft/guardhouse-sdk-dotnet</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <RepositoryBranch>release</RepositoryBranch>
-    
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    
-    <NoWarn>$(NoWarn);NU1603;NU5128;CS1591</NoWarn>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <Deterministic>true</Deterministic>
-    
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-  </PropertyGroup>
+        <PackageReleaseNotes>
+            Beta release - First public release of Guardhouse SDK for .NET.
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DebugSymbols>false</DebugSymbols>
-    <DebugType>none</DebugType>
-  </PropertyGroup>
+            Features:
+            - JWT signature validation with JWKS caching and lazy refresh
+            - Token introspection support (RFC 7662)
+            - Comprehensive security validations (algorithm, token type, issuer, audience, lifetime)
+            - Configurable validation modes (JWT Signature or Introspection)
+            - Client credentials flow support
+            - HTTP resilience and retry policies
+            - Configuration validation with clear error messages
+        </PackageReleaseNotes>
+        <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation</PackageTags>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.6" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.6" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.6" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.6" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.6" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.6" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.1" />
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
-    <PackageReference Include="NodaTime" Version="3.2.0" />
-    <PackageReference Include="Polly" Version="8.5.0" />
-    <PackageReference Include="Polly.Extensions" Version="8.5.0" />
-  </ItemGroup>
+        <RepositoryUrl>https://github.com/legiosoft/guardhouse-sdk-dotnet</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryBranch>release</RepositoryBranch>
 
-  <ItemGroup>
-  </ItemGroup>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
 
+        <NoWarn>$(NoWarn);NU1603;NU5128;CS1591</NoWarn>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <Deterministic>true</Deterministic>
+
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+        <DebugSymbols>false</DebugSymbols>
+        <DebugType>none</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Polly" Version="8.5.0"/>
+        <PackageReference Include="NodaTime" Version="3.2.0"/>
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.1"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="6.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.25" />
+        <PackageReference Include="System.Text.Json" Version="6.0.10" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    </ItemGroup>
 </Project>
