@@ -61,34 +61,34 @@ jobs:
           fi
           
       - name: Build
-        run: dotnet build --no-restore -c Release /p:Version=${{ steps.version.outputs.version }}
+        run: dotnet build --no-restore -c Release /p:Version="${{ steps.version.outputs.version }}"
       
       - name: Run Tests
-        run: dotnet test --no-build --logger "console;verbosity=detailed" --results-directory ../TestResults --collect:"XPlat Code Coverage"
+        run: dotnet test --no-build --logger "console;verbosity=detailed" --results-directory TestResults --collect:"XPlat Code Coverage"
       
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results
-          path: ../TestResults/
+          path: TestResults/
           
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-reports
-          path: ../coverage.xml
+          path: coverage.xml
           
       - name: Pack
-        run: dotnet pack --no-restore --output ../nuget /p:Version=${{ steps.version.outputs.version }}
+        run: dotnet pack --no-restore --output nuget/ /p:Version="${{ steps.version.outputs.version }}"
       
       - name: Upload NuGet package
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: nuget-package
-          path: ../nuget/
+          path: nuget/
   
   release:
     needs: build
@@ -100,7 +100,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nuget-package
-          path: ../nuget/
           
       - name: Publish to NuGet
-        run: dotnet nuget push ../nuget/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+        run: dotnet nuget push nuget-package/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
