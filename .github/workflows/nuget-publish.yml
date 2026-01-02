@@ -95,6 +95,6 @@ jobs:
       
       - name: Publish to NuGet
         working-directory: src/nuget
-        run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+        run: dotnet nuget push Guardhouse.SDK.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
         env:
           GH_TOKEN: ${{ github.token }}
