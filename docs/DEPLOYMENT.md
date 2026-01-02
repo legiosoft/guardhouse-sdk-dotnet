@@ -76,26 +76,21 @@ Edit `src/Guardhouse.SDK.csproj`:
 2. Sign in and navigate to **API Keys**
 3. Create a new key with **Push** scope for the package `Guardhouse.SDK`
 
-#### 2. Set API Key Globally
-
-```bash
-dotnet nuget setapikey YOUR_API_KEY
-```
-
-#### 3. Push Package
+#### 2. Push Package
 
 ```bash
 # Push all packages from artifacts directory
-dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key YOUR_API_KEY
+
 
 # Push specific package
-dotnet nuget push ./artifacts/Guardhouse.SDK.1.0.0.nupkg --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/Guardhouse.SDK.1.0.0.nupkg --source https://api.nuget.org/v3/index.json --api-key YOUR_API_KEY
 ```
 
-#### 4. Push Symbols (Optional)
+#### 3. Push Symbols (Optional)
 
 ```bash
-dotnet nuget push ./artifacts/*.snupkg --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/*.snupkg --source https://api.nuget.org/v3/index.json --api-key YOUR_API_KEY
 ```
 
 ### Automatic Publishing via GitHub Actions
