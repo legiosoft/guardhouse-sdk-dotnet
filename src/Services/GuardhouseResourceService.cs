@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Models;
 using Microsoft.AspNetCore.Authentication;
 
-public class GuardhouseResourceService(IAuthenticationSchemeProvider schemeProvider) 
+public class GuardhouseResourceService(IAuthenticationSchemeProvider schemeProvider)
     : IGuardhouseResourceService
 {
     public Task<ClaimsPrincipal?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default)

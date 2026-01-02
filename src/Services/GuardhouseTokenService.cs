@@ -43,8 +43,15 @@ public class GuardhouseTokenService(
 
     private static readonly SemaphoreSlim TokenLock = new(1, 1);
 
-    private string GetTokenCacheKey() => $"guardhouse_access_token_{options.Value.ClientId}";
-    private string GetRefreshTokenCacheKey() => $"guardhouse_refresh_token_{options.Value.ClientId}";
+    private string GetTokenCacheKey()
+    {
+        return $"guardhouse_access_token_{options.Value.ClientId}";
+    }
+
+    private string GetRefreshTokenCacheKey()
+    {
+        return $"guardhouse_refresh_token_{options.Value.ClientId}";
+    }
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
