@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     
     <PackageId>Guardhouse.SDK</PackageId>
-    <Version>1.0.0-beta1</Version>
-    <PackageVersion>1.0.0-beta1</PackageVersion>
+    <Version>1.0.0-beta2</Version>
+    <PackageVersion>1.0.0-beta2</PackageVersion>
     <PackageAuthors>LEGIOSOFT SOLUTIONS S.L.</PackageAuthors>
     <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
     <Product>Guardhouse SDK</Product>
@@ -16,7 +16,7 @@
     <Description>Official .NET SDK for https://guardhouse.cloud platform. Use it for .NET clients when you already configured everything in Guardhouse Cloud.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://guardhouse.cloud</PackageProjectUrl>
-    <PackageIconUrl>https://raw.githubusercontent.com/guardhouse/guardhouse-sdk-dotnet/main/icon.png</PackageIconUrl>
+    <PackageIconUrl>https://raw.githubusercontent.com/legiosoft/guardhouse-sdk-dotnet/refs/heads/dev/icon.png</PackageIconUrl>
 
     <PackageReleaseNotes>
 Beta release - First public release of Guardhouse SDK for .NET.
@@ -32,7 +32,7 @@ Features:
     </PackageReleaseNotes>
     <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation</PackageTags>
     
-    <RepositoryUrl>https://github.com/guardhouse/guardhouse-sdk-dotnet</RepositoryUrl>
+    <RepositoryUrl>https://github.com/legiosoft/guardhouse-sdk-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryBranch>release</RepositoryBranch>
     

@@ -1,5 +1,7 @@
+using System.Linq;
 using System.Net;
 using System.Text.Json;
+using System.Threading;
 using FluentAssertions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
@@ -81,16 +83,16 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task RequestTokenAsync_ShouldIncludeRequiredParameters()
     {
-        HttpMessageHandler? sentRequest = null;
+        HttpRequestMessage? sentRequest = null;
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
-            }));
+            });
 
         var tokenService = CreateTokenService();
         await tokenService.RequestTokenAsync();
@@ -106,11 +108,11 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
                 Content = new StringContent("{\"error\":\"invalid_client\"}")
-            }));
+            });
 
         var tokenService = CreateTokenService();
 
@@ -124,28 +126,23 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>((req, ct) =>
+            .ReturnsAsync(() =>
             {
                 attemptCount++;
-                if (attemptCount < 3)
+                if (attemptCount < 4)
                 {
-                    return Task.FromResult(new HttpResponseMessage
+                    return new HttpResponseMessage
                     {
                         StatusCode = HttpStatusCode.TooManyRequests
-                    });
+                    };
                 }
 
-                return Task.FromResult(new HttpResponseMessage
+                return new HttpResponseMessage
                 {
                     StatusCode = HttpStatusCode.OK,
                     Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
-                });
-            })
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
-            }));
+                };
+            });
 
         var tokenService = CreateTokenService();
         await tokenService.RequestTokenAsync();
@@ -180,11 +177,11 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.Unauthorized,
                 Content = new StringContent("{\"error\":\"invalid_grant\"}")
-            }));
+            });
 
         var tokenService = CreateTokenService();
 
@@ -205,7 +202,7 @@ public class GuardhouseTokenServiceTests
             ExpiresIn = 3600
         };
 
-        _memoryCache.Set("guardhouse_access_token", cachedToken);
+        _memoryCache.Set("guardhouse_access_token_test-client", cachedToken);
 
         var tokenService = CreateTokenService();
         var token = await tokenService.GetAccessTokenAsync();
@@ -223,7 +220,7 @@ public class GuardhouseTokenServiceTests
             ExpiresIn = -3600
         };
 
-        _memoryCache.Set("guardhouse_access_token", expiredToken);
+        _memoryCache.Set("guardhouse_access_token_test-client", expiredToken);
 
         SetupMockTokenResponse(new TokenResponse
         {
@@ -249,8 +246,8 @@ public class GuardhouseTokenServiceTests
             RefreshToken = "old_refresh_token"
         };
 
-        _memoryCache.Set("guardhouse_access_token", cachedToken);
-        _memoryCache.Set("guardhouse_refresh_token", "old_refresh_token");
+        _memoryCache.Set("guardhouse_access_token_test-client", cachedToken);
+        _memoryCache.Set("guardhouse_refresh_token_test-client", "old_refresh_token");
 
         SetupMockTokenResponse(new TokenResponse
         {
@@ -264,6 +261,63 @@ public class GuardhouseTokenServiceTests
         var token = await tokenService.GetAccessTokenAsync();
 
         token.Should().Be("new_token");
+    }
+
+    #endregion
+
+    #region Cache Key Security Tests
+
+    [Fact]
+    public async Task GetAccessTokenAsync_DifferentClients_ShouldNotShareCache()
+    {
+        var cachedTokenForClient1 = new TokenResponse
+        {
+            AccessToken = "client1_token",
+            TokenType = "Bearer",
+            ExpiresIn = 3600
+        };
+
+        var options1 = new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "client1",
+            ClientSecret = "test-secret",
+            Scope = "api",
+            EnableTokenCaching = true,
+            CacheExpirationBufferSeconds = 60
+        };
+        var options1Wrapper = Options.Create(options1);
+
+        var service1 = new GuardhouseTokenService(_httpClient, _memoryCache, options1Wrapper, _mockLogger.Object, _testClock);
+
+        var cachedTokenForClient2 = new TokenResponse
+        {
+            AccessToken = "client2_token",
+            TokenType = "Bearer",
+            ExpiresIn = 3600
+        };
+
+        var options2 = new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "client2",
+            ClientSecret = "test-secret",
+            Scope = "api",
+            EnableTokenCaching = true,
+            CacheExpirationBufferSeconds = 60
+        };
+        var options2Wrapper = Options.Create(options2);
+
+        var service2 = new GuardhouseTokenService(_httpClient, _memoryCache, options2Wrapper, _mockLogger.Object, _testClock);
+
+        _memoryCache.Set("guardhouse_access_token_client1", cachedTokenForClient1);
+        _memoryCache.Set("guardhouse_access_token_client2", cachedTokenForClient2);
+
+        var token1 = await service1.GetAccessTokenAsync();
+        var token2 = await service2.GetAccessTokenAsync();
+
+        token1.Should().Be("client1_token");
+        token2.Should().Be("client2_token");
     }
 
     #endregion
@@ -289,6 +343,56 @@ public class GuardhouseTokenServiceTests
     }
 
     [Fact]
+    public async Task IntrospectTokenAsync_ShouldUseBasicAuthentication()
+    {
+        HttpRequestMessage? sentRequest = null;
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new IntrospectionResponse { Active = true }))
+            });
+
+        var tokenService = CreateTokenService();
+        await tokenService.IntrospectTokenAsync("test_token");
+
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Headers.Authorization.Should().NotBeNull();
+        sentRequest.Headers.Authorization!.Scheme.Should().Be("Basic");
+        var expectedCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("test-client:test-secret"));
+        sentRequest.Headers.Authorization.Parameter.Should().Be(expectedCredentials);
+    }
+
+    [Fact]
+    public async Task IntrospectTokenAsync_ShouldNotIncludeCredentialsInFormBody()
+    {
+        string? contentData = null;
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                contentData = await req.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new IntrospectionResponse { Active = true }))
+            });
+
+        var tokenService = CreateTokenService();
+        await tokenService.IntrospectTokenAsync("test_token");
+
+        contentData.Should().NotBeNull();
+        contentData.Should().NotContain("client_id");
+        contentData.Should().NotContain("client_secret");
+        contentData.Should().Contain("token=test_token");
+    }
+
+    [Fact]
     public async Task IntrospectTokenAsync_WhenTokenIsInactive_ShouldReturnInactive()
     {
         SetupMockIntrospectionResponse(new IntrospectionResponse
@@ -309,11 +413,11 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
                 Content = new StringContent("{\"error\":\"invalid_request\"}")
-            }));
+            });
 
         var tokenService = CreateTokenService();
 
@@ -358,15 +462,62 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.InternalServerError
-            }));
+            });
 
         var tokenService = CreateTokenService();
         var isActive = await tokenService.IsTokenActiveAsync("test_token");
 
         isActive.Should().BeFalse();
+    }
+
+    #endregion
+
+    #region Concurrency Tests
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WithConcurrentRequests_ShouldPreventThunderingHerd()
+    {
+        var expiredToken = new TokenResponse
+        {
+            AccessToken = "expired_token",
+            TokenType = "Bearer",
+            ExpiresIn = -3600
+        };
+
+        _memoryCache.Set("guardhouse_access_token_test-client", expiredToken);
+
+        var requestCount = 0;
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, ct) =>
+            {
+                Interlocked.Increment(ref requestCount);
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new TokenResponse
+                {
+                    AccessToken = "new_token",
+                    TokenType = "Bearer",
+                    ExpiresIn = 3600
+                }))
+            });
+
+        var tokenService = CreateTokenService();
+
+        var tasks = Enumerable.Range(0, 10)
+            .Select(_ => tokenService.GetAccessTokenAsync())
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+
+        requestCount.Should().Be(1, "Only one HTTP request should be made despite 10 concurrent calls");
+        tasks.All(t => t.Result == "new_token").Should().BeTrue();
     }
 
     #endregion
@@ -378,11 +529,11 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(tokenResponse))
-            }));
+            });
     }
 
     private void SetupMockIntrospectionResponse(IntrospectionResponse introspectionResponse)
@@ -390,11 +541,11 @@ public class GuardhouseTokenServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(introspectionResponse))
-            }));
+            });
     }
 
     #endregion

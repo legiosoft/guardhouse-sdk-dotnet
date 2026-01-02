@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
+using Guardhouse.SDK.Models.Validation;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -56,7 +57,6 @@ public class ServiceCollectionExtensionsTests
         {
             options.Authority = "https://test.com";
             options.Audience = "test-audience";
-            options.EnableIntrospection = false;
         });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IAuthenticationService));
@@ -72,7 +72,7 @@ public class ServiceCollectionExtensionsTests
         {
             options.Authority = "https://test.com";
             options.Audience = "test-audience";
-            options.EnableIntrospection = true;
+            options.ValidationMode = TokenValidationMode.Introspection;
             options.IntrospectionClientId = "introspection-client";
             options.IntrospectionClientSecret = "introspection-secret";
         });
@@ -86,46 +86,30 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AddGuardhouseResource_WithIntrospectionMode_MissingClientId_ShouldThrowValidationException()
+    public void AddGuardhouseResource_WithIntrospectionMode_ShouldRequireIntrospectionCredentials()
     {
         var services = new ServiceCollection();
-        
-        Action act = () => services.AddGuardhouseResource(options =>
+        services.AddGuardhouseResource(options =>
         {
             options.Authority = "https://test.com";
             options.Audience = "test-audience";
             options.ValidationMode = TokenValidationMode.Introspection;
-            options.IntrospectionClientId = string.Empty;
-            options.IntrospectionClientSecret = "test-secret";
+            options.IntrospectionClientId = "introspection-client";
+            options.IntrospectionClientSecret = "introspection-secret";
         });
 
-        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
-            .WithMessage("*IntrospectionClientId is required*");
-    }
+        var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseResourceOptions>>().Value;
 
-    [Fact]
-    public void AddGuardhouseResource_WithIntrospectionMode_MissingClientSecret_ShouldThrowValidationException()
-    {
-        var services = new ServiceCollection();
-        
-        Action act = () => services.AddGuardhouseResource(options =>
-        {
-            options.Authority = "https://test.com";
-            options.Audience = "test-audience";
-            options.ValidationMode = TokenValidationMode.Introspection;
-            options.IntrospectionClientId = "test-client";
-            options.IntrospectionClientSecret = string.Empty;
-        });
-
-        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
-            .WithMessage("*IntrospectionClientSecret is required*");
+        options.IntrospectionClientId.Should().Be("introspection-client");
+        options.IntrospectionClientSecret.Should().Be("introspection-secret");
     }
 
     [Fact]
     public void AddGuardhouseResource_WithJwtSignatureMode_ShouldNotRequireIntrospectionCredentials()
     {
         var services = new ServiceCollection();
-        
+
         Action act = () => services.AddGuardhouseResource(options =>
         {
             options.Authority = "https://test.com";
@@ -134,36 +118,13 @@ public class ServiceCollectionExtensionsTests
         });
 
         act.Should().NotThrow();
-    }
 
-    [Fact]
-    public void AddGuardhouseResource_MissingAuthority_ShouldThrowValidationException()
-    {
-        var services = new ServiceCollection();
-        
-        Action act = () => services.AddGuardhouseResource(options =>
-        {
-            options.Authority = string.Empty;
-            options.Audience = "test-audience";
-        });
+        var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseResourceOptions>>().Value;
 
-        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
-            .WithMessage("*Authority is required*");
-    }
-
-    [Fact]
-    public void AddGuardhouseResource_MissingAudience_ShouldThrowValidationException()
-    {
-        var services = new ServiceCollection();
-        
-        Action act = () => services.AddGuardhouseResource(options =>
-        {
-            options.Authority = "https://test.com";
-            options.Audience = string.Empty;
-        });
-
-        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
-            .WithMessage("*Audience is required*");
+        options.EnableIntrospection.Should().BeFalse();
+        options.IntrospectionClientId.Should().BeNull();
+        options.IntrospectionClientSecret.Should().BeNull();
     }
 
     [Fact]

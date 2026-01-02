@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
+using NodaTime;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Services;
@@ -92,11 +93,11 @@ public class GuardhouseIntrospectionServiceTests
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(new IntrospectionResponse { Active = true }))
-            }));
+            });
 
         var service = CreateService();
         await service.IntrospectTokenAsync("test_token");
@@ -122,9 +123,11 @@ public class GuardhouseIntrospectionServiceTests
         var result = await service.IntrospectTokenAsync("test_token");
 
         result.Should().BeSameAs(cachedResponse);
-        _mockHttpMessageHandler.Protected().Verify(
-            x => x.SendAsync(ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>()),
-            Times.Never());
+        _mockHttpMessageHandler.Protected().Verify<Task<HttpResponseMessage>>(
+            "SendAsync",
+            Times.Never(),
+            ItExpr.IsAny<HttpRequestMessage>(),
+            ItExpr.IsAny<CancellationToken>());
     }
 
     [Fact]
@@ -166,10 +169,10 @@ public class GuardhouseIntrospectionServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.InternalServerError
-            }));
+            });
 
         var service = CreateService();
 
@@ -177,20 +180,20 @@ public class GuardhouseIntrospectionServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_WhenDeserializationFails_ShouldThrowInvalidOperationException()
+    public async Task IntrospectTokenAsync_WhenDeserializationFails_ShouldThrowJsonException()
     {
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent("invalid json")
-            }));
+            });
 
         var service = CreateService();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.IntrospectTokenAsync("test_token"));
+        await Assert.ThrowsAsync<System.Text.Json.JsonException>(() => service.IntrospectTokenAsync("test_token"));
     }
 
     [Fact]
@@ -277,11 +280,11 @@ public class GuardhouseIntrospectionServiceTests
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() => Task.FromResult(new HttpResponseMessage
+            .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(response))
-            }));
+            });
     }
 
     private static string ComputeTokenHash(string token)

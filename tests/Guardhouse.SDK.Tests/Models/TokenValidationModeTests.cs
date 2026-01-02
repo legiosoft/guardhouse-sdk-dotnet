@@ -9,13 +9,13 @@ public class TokenValidationModeTests
     [Fact]
     public void JwtSignature_ShouldHaveCorrectValue()
     {
-        TokenValidationMode.JwtSignature.Should().Be(0);
+        ((int)TokenValidationMode.JwtSignature).Should().Be(0);
     }
 
     [Fact]
     public void Introspection_ShouldHaveCorrectValue()
     {
-        TokenValidationMode.Introspection.Should().Be(1);
+        ((int)TokenValidationMode.Introspection).Should().Be(1);
     }
 
     [Fact]
