@@ -38,6 +38,8 @@ public class GuardhouseResourceOptions
 
     public int JwksRefreshIntervalMinutes { get; set; } = GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
 
+    // Micro-Cache strategy: This short TTL handles burst traffic (e.g., page loads with multiple API calls)
+    // while maintaining near-real-time revocation security by rapidly refreshing cached introspection results.
     public int IntrospectionCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionCacheTtlSeconds;
 
     public string[] ValidAlgorithms { get; set; } = [GuardhouseConstants.Algorithms.RS256];
