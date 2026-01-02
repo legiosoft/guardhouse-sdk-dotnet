@@ -43,7 +43,7 @@ Features:
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     
-    <NoWarn>$(NoWarn);NU1603;NU5128</NoWarn>
+    <NoWarn>$(NoWarn);NU1603;NU5128;CS1591</NoWarn>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     

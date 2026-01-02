@@ -1,7 +1,6 @@
 using FluentAssertions;
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Models;

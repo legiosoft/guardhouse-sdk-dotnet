@@ -3,7 +3,7 @@ namespace Guardhouse.SDK.Services;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
-using Guardhouse.SDK.Models;
+using Models;
 using Microsoft.AspNetCore.Authentication;
 
 public interface IGuardhouseResourceService

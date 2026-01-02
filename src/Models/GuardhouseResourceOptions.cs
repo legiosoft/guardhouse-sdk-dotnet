@@ -1,8 +1,8 @@
 namespace Guardhouse.SDK.Models;
 
 using System.ComponentModel.DataAnnotations;
-using Guardhouse.SDK.Constants;
-using Guardhouse.SDK.Models.Validation;
+using Constants;
+using Validation;
 
 public class GuardhouseResourceOptions
 {
@@ -10,7 +10,7 @@ public class GuardhouseResourceOptions
     public string Authority { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Audience is required")]
-    public string Audience { get; set; } = "my_resource_api";
+    public string Audience { get; set; } = string.Empty;
 
     public TokenValidationMode ValidationMode { get; set; } = TokenValidationMode.JwtSignature;
 

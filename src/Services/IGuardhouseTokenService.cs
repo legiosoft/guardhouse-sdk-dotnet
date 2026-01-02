@@ -2,7 +2,7 @@ namespace Guardhouse.SDK.Services;
 
 using System.Threading;
 using System.Threading.Tasks;
-using Guardhouse.SDK.Models;
+using Models;
 
 public interface IGuardhouseTokenService
 {

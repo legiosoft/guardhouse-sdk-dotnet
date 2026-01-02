@@ -1,7 +1,7 @@
 namespace Guardhouse.SDK.Models;
 
 using System.ComponentModel.DataAnnotations;
-using Guardhouse.SDK.Constants;
+using Constants;
 
 public class GuardhouseClientOptions
 {

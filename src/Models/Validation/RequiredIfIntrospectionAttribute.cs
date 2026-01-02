@@ -1,9 +1,8 @@
 namespace Guardhouse.SDK.Models.Validation;
 
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using Guardhouse.SDK.Models;
+using Models;
 
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class RequiredIfIntrospectionAttribute : ValidationAttribute

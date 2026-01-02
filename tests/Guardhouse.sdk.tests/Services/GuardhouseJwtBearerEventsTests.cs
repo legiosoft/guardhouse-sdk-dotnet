@@ -1,8 +1,5 @@
-using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Threading.Tasks;
-using FluentAssertions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

@@ -5,13 +5,12 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Guardhouse.SDK.Constants;
-using Guardhouse.SDK.Models;
+using Constants;
+using Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 public class GuardhouseIntrospectionJwtBearerEvents(
     IOptions<GuardhouseResourceOptions> options,

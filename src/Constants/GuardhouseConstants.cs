@@ -8,6 +8,7 @@ public static class GuardhouseConstants
         public const string WellKnownJwks = ".well-known/jwks.json";
         public const string ConnectToken = "connect/token";
         public const string ConnectIntrospect = "connect/introspect";
+        public const string ConnectAuthorize = "connect/authorize";
     }
 
     public static class Algorithms

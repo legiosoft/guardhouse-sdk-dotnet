@@ -2,9 +2,9 @@ namespace Guardhouse.SDK.Extensions;
 
 using System;
 using System.Net.Http;
-using Guardhouse.SDK.Constants;
-using Guardhouse.SDK.Models;
-using Guardhouse.SDK.Services;
+using Constants;
+using Models;
+using Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -68,7 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer();
 
-        services.AddHttpClient<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>((sp, client) =>
+        services.AddHttpClient<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>((_, client) =>
         {
             client.Timeout = TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
         });
@@ -109,12 +109,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddGuardhouseResource(
         this IServiceCollection services,
         string authority,
-        string? audience = null)
+        string audience)
     {
         return services.AddGuardhouseResource(options =>
         {
             options.Authority = authority;
-            options.Audience = audience ?? "my_resource_api";
+            options.Audience = audience;
         });
     }
 

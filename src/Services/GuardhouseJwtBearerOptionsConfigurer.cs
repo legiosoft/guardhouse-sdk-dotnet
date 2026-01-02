@@ -2,37 +2,36 @@ namespace Guardhouse.SDK.Services;
 
 using System;
 using System.Threading.Tasks;
-using Guardhouse.SDK.Constants;
-using Guardhouse.SDK.Models;
+using Constants;
+using Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-internal class GuardhouseJwtBearerOptionsConfigurer(IOptions<GuardhouseResourceOptions> resourceOptions) : IConfigureNamedOptions<JwtBearerOptions>
+internal class GuardhouseJwtBearerOptionsConfigurer(IOptions<GuardhouseResourceOptions> resourceOptions)
+    : IConfigureNamedOptions<JwtBearerOptions>
 {
-    private readonly IOptions<GuardhouseResourceOptions> _resourceOptions = resourceOptions;
+    private const string GuardhouseSchemeName = "Guardhouse";
 
     public void Configure(JwtBearerOptions options)
     {
-        var resourceOptions = _resourceOptions.Value;
-        Configure(options, resourceOptions.Authority, resourceOptions.Audience);
+        Configure(GuardhouseSchemeName, options);
     }
 
     public void Configure(string? name, JwtBearerOptions options)
     {
-        var resourceOptions = _resourceOptions.Value;
-        Configure(options, resourceOptions.Authority, resourceOptions.Audience);
-    }
+        if (name != GuardhouseSchemeName)
+        {
+            return;
+        }
 
-    private void Configure(JwtBearerOptions options, string authority, string audience)
-    {
-        var resourceOptions = _resourceOptions.Value;
+        var opts = resourceOptions.Value;
 
-        options.Authority = authority;
-        options.Audience = audience;
-        options.RequireHttpsMetadata = resourceOptions.RequireHttpsMetadata ?? authority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        options.Authority = opts.Authority;
+        options.Audience = opts.Audience;
+        options.RequireHttpsMetadata = opts.RequireHttpsMetadata ?? opts.Authority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-        if (resourceOptions.EnableIntrospection)
+        if (opts.EnableIntrospection)
         {
             options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
         }
@@ -40,45 +39,24 @@ internal class GuardhouseJwtBearerOptionsConfigurer(IOptions<GuardhouseResourceO
         {
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = resourceOptions.ValidateIssuer,
-                ValidIssuer = authority,
+                ValidateIssuer = opts.ValidateIssuer,
+                ValidIssuer = opts.Authority,
 
-                ValidateAudience = resourceOptions.ValidateAudience,
-                ValidAudience = audience,
+                ValidateAudience = opts.ValidateAudience,
+                ValidAudience = opts.Audience,
 
-                ValidateLifetime = resourceOptions.ValidateLifetime,
+                ValidateLifetime = opts.ValidateLifetime,
                 ClockSkew = TimeSpan.FromMinutes(GuardhouseConstants.Defaults.ClockSkewMinutes),
 
-                ValidateIssuerSigningKey = resourceOptions.ValidateIssuerSigningKey,
+                ValidateIssuerSigningKey = opts.ValidateIssuerSigningKey,
 
-                ValidAlgorithms = resourceOptions.ValidAlgorithms,
+                ValidAlgorithms = opts.ValidAlgorithms,
 
-                ValidTypes = resourceOptions.TokenTypes
+                ValidTypes = opts.TokenTypes,
             };
 
             options.Events = new JwtBearerEvents
             {
-                OnTokenValidated = async context =>
-                {
-                    if (context.SecurityToken is System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwtToken)
-                    {
-                        if (!string.IsNullOrEmpty(jwtToken.Header.Typ) &&
-                            !resourceOptions.TokenTypes.Contains(jwtToken.Header.Typ))
-                        {
-                            context.Fail($"Token type '{jwtToken.Header.Typ}' is not allowed");
-                            return;
-                        }
-
-                        if (!resourceOptions.ValidAlgorithms.Contains(jwtToken.Header.Alg))
-                        {
-                            context.Fail($"Algorithm '{jwtToken.Header.Alg}' is not allowed");
-                            return;
-                        }
-                    }
-
-                    await Task.CompletedTask;
-                },
-
                 OnAuthenticationFailed = context =>
                 {
                     if (context.Exception is SecurityTokenExpiredException)
@@ -92,7 +70,7 @@ internal class GuardhouseJwtBearerOptionsConfigurer(IOptions<GuardhouseResourceO
 
             options.RefreshOnIssuerKeyNotFound = true;
 
-            options.AutomaticRefreshInterval = TimeSpan.FromMinutes(resourceOptions.JwksRefreshIntervalMinutes);
+            options.AutomaticRefreshInterval = TimeSpan.FromMinutes(opts.JwksRefreshIntervalMinutes);
             options.BackchannelTimeout = TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
         }
     }
