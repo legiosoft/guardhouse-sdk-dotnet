@@ -62,14 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Proper HTTPS metadata enforcement
 
 ### Dependencies
-- .NET 8.0
+- .NET 6.0, 7.0, 8.0, 9.0, 10.0
 - Microsoft.Extensions.* (DI, HTTP, Options, Caching, Authentication)
 - System.IdentityModel.Tokens.Jwt
 - NodaTime
 - Polly
 
 ### Known Limitations (Beta)
-- Only .NET 8.0 supported (planning to add .NET 6.0/7.0)
 - Strong name signing not yet implemented
 - Limited to client credentials flow
 - No support for PKCE or authorization code flow

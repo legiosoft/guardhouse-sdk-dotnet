@@ -16,6 +16,8 @@ Or via NuGet Package Manager Console:
 Install-Package Guardhouse.SDK
 ```
 
+**Supported Frameworks**: .NET 6.0, 7.0, 8.0, 9.0, 10.0
+
 ## Quick Start
 
 ### Client Application (Requesting Access Tokens)
@@ -370,7 +372,7 @@ public IActionResult AdminEndpoint()
 
 ## Dependencies
 
-- .NET 8.0
+- .NET 6.0 or later (supports .NET 6.0, 7.0, 8.0, 9.0, 10.0)
 - Microsoft.Extensions.DependencyInjection
 - Microsoft.Extensions.Http
 - Microsoft.Extensions.Http.Polly
@@ -420,7 +422,8 @@ builder.Services.AddGuardhouseResource(options =>
 ## Documentation
 
 - Guardhouse Documentation: https://docs.guardhouse.cloud
-- GitHub Issues: https://github.com/guardhouse/guardhouse-sdk-dotnet/issues
+- GitHub Issues: https://github.com/legiosoft/guardhouse-sdk-dotnet/issues
+- Deployment Guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## License
 

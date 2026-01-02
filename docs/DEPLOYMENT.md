@@ -1,280 +1,345 @@
-# 🚀 Deployment Guide
+# Deployment Guide
 
-This document explains how to deploy the Guardhouse SDK for .NET.
+This guide explains how to build, test, and publish the Guardhouse SDK for .NET to NuGet.org.
 
-## 📋 Prerequisites
+## Prerequisites
 
-1. **.NET 8.0 SDK** - Required for building the project
-2. **NuGet API Key** - Required for publishing to NuGet.org
-3. **GitHub Repository** - The project is already structured for CI/CD
+- **.NET 8.0 SDK** or later (for building)
+- **NuGet.org Account** with API key (for publishing)
+- **GitHub Repository** with workflow configured
 
-## 🏗️ Local Development Setup
+## Local Development
 
-### Clone the Repository
+### Clone Repository
+
 ```bash
-git clone https://github.com/your-username/guardhouse-sdk-dotnet.git
+git clone https://github.com/legiosoft/guardhouse-sdk-dotnet.git
 cd guardhouse-sdk-dotnet
 ```
 
-### Restore Dependencies
+### Build Project
+
 ```bash
 dotnet restore
-```
-
-### Build the Project
-```bash
 dotnet build -c Release
 ```
 
 ### Run Tests
+
 ```bash
-dotnet test --logger "console;verbosity=detailed"
+dotnet test -c Release --logger "console;verbosity=detailed"
 ```
 
 ### Create Local NuGet Package
+
 ```bash
-dotnet pack -c Release --output ./artifacts
+dotnet pack -c Release -o ./artifacts
 ```
 
-## 🚢 CI/CD Pipeline
+The packages will be created in the `./artifacts` directory.
 
-The project includes a **GitHub Actions** workflow at `.github/workflows/nuget-publish.yml` that:
+## Version Management
 
-### ✅ Automated Features
-- **Multi-branch support** (main, develop, tags)
-- **Semantic versioning** (automatic version from tags)
-- **Comprehensive testing** with coverage reports
-- **Artifact management** (test results, coverage, NuGet packages)
-- **NuGet publishing** (automatic on tags)
-- **Dependency caching** for faster builds
+### Semantic Versioning
 
-### 🔄 Workflow Triggers
-```yaml
-on:
-  push:
-    tags: 'v*'        # Creates releases for version tags
-    branches:
-      - main          # Continuous integration
-      - develop       # Development builds
+The project follows [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **Format**: `MAJOR.MINOR.PATCH` (e.g., `1.0.0`)
+- **Prerelease**: `MAJOR.MINOR.PATCH-prerelease` (e.g., `1.0.0-beta1`)
+- **Build Metadata**: `MAJOR.MINOR.PATCH+build` (e.g., `1.0.0+20250102`)
+
+### Update Version in Project File
+
+Edit `src/Guardhouse.SDK.csproj`:
+
+```xml
+<PropertyGroup>
+    <Version>1.0.0</Version>
+    <!-- Or for prerelease -->
+    <Version>1.0.0-beta1</Version>
+</PropertyGroup>
 ```
 
-### 📦 Build Process
-1. **Checkout** source code
-2. **Setup .NET 8.0** environment
-3. **Cache NuGet packages** between runs
-4. **Restore** dependencies
-5. **Determine version** (from git tags/branches)
-6. **Build** in Release configuration
-7. **Run tests** with detailed logging and coverage
-8. **Pack** NuGet package
-9. **Upload artifacts** (test results, coverage, package)
-10. **Publish to NuGet** (on tags only)
+### Version Sources
 
-### 🧪 Versioning Strategy
-- **Main branch**: `1.0.0` (stable releases)
-- **Develop branch**: `1.0.0-preview` (preview releases)
-- **Tags**: Extracted from tag name (e.g., `v1.2.3` → `1.2.3`)
+1. **Project File**: Used for local builds and CI builds
+2. **Git Tags**: Used for release builds (e.g., `v1.0.0` → version `1.0.0`)
+3. **CI Tags**: Generated automatically for PR builds (`1.0.0-ci`)
 
-## 📦 Package Publishing
+## Publishing to NuGet.org
 
 ### Manual Publishing
+
+#### 1. Create API Key
+
+1. Go to [NuGet.org](https://www.nuget.org/)
+2. Sign in and navigate to **API Keys**
+3. Create a new key with **Push** scope for the package `Guardhouse.SDK`
+
+#### 2. Set API Key Globally
+
 ```bash
-# 1. Login to NuGet
-dotnet nuget add source -name "guardhouse-sdk" -src https://api.nuget.org/v3/index.json
-
-# 2. Set API key
-dotnet nuget setapikey Your-NuGet-API-Key -source https://api.nuget.org/v3/index.json
-
-# 3. Push package
-dotnet nuget push Guardhouse.SDK.1.0.0.nupkg -source https://api.nuget.org/v3/index.json
-
-# 4. Push symbols (optional)
-dotnet nuget push Guardhouse.SDK.1.0.0.snupkg -source https://api.nuget.org/v3/index.json
+dotnet nuget setapikey YOUR_API_KEY
 ```
 
-### 🏷️ GitHub Actions Publishing
-The workflow automatically:
-- **Creates release artifacts** on version tags
-- **Publishes to NuGet.org** using stored API key
-- **Skips duplicate uploads** to prevent errors
-- **Supports preview versions** for develop branch
+#### 3. Push Package
 
-## 🔐 Secrets Configuration
+```bash
+# Push all packages from artifacts directory
+dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json
 
-### GitHub Secrets
-Set these in your repository settings:
+# Push specific package
+dotnet nuget push ./artifacts/Guardhouse.SDK.1.0.0.nupkg --source https://api.nuget.org/v3/index.json
+```
 
-1. `NUGET_API_KEY` - Your NuGet.org API key
-2. `NUGET_SOURCE_URL` - (Optional) Custom NuGet feed URL
+#### 4. Push Symbols (Optional)
 
-### Local Development
-Create `NuGet.Config` in your user directory:
+```bash
+dotnet nuget push ./artifacts/*.snupkg --source https://api.nuget.org/v3/index.json
+```
+
+### Automatic Publishing via GitHub Actions
+
+The workflow at `.github/workflows/nuget-publish.yml` automates the entire process.
+
+#### Workflow Triggers
+
+- **Version tags**: `v1.0.0`, `v1.0.0-beta1`, etc. → Builds and publishes to NuGet.org
+- **Main branch pushes**: Builds and tests only (no publishing)
+- **Pull requests**: Builds and tests only (no publishing)
+
+#### Setup GitHub Secrets
+
+1. Go to your repository **Settings** → **Secrets and variables** → **Actions**
+2. Add the following secret:
+
+   **`NUGET_API_KEY`**: Your NuGet.org API key
+
+#### Create Release Tag
+
+```bash
+# Create and push version tag
+git tag v1.0.0
+git push origin v1.0.0
+
+# Or with annotation
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+```
+
+The GitHub Actions workflow will:
+1. Extract version from tag (`v1.0.0` → `1.0.0`)
+2. Build the project with the extracted version
+3. Run all tests
+4. Create NuGet package
+5. Publish to NuGet.org
+6. Create GitHub release
+
+#### Check Workflow Status
+
+1. Go to **Actions** tab in your GitHub repository
+2. Click on the workflow run
+3. View logs for each step
+
+## Workflow Details
+
+### Build Job
+
+```yaml
+- Checkout source code
+- Setup .NET 8.0 SDK
+- Cache NuGet packages (speeds up subsequent builds)
+- Determine version from git tag or project file
+- Restore dependencies
+- Build in Release configuration
+- Run all tests
+- Upload test results as artifacts
+- Pack NuGet packages (on push only)
+- Upload packages as artifacts (on push only)
+```
+
+### Publish Job
+
+```yaml
+- Download NuGet packages from artifacts
+- Download symbol packages from artifacts
+- Verify packages exist
+- Push to NuGet.org using API key
+- Push symbols to NuGet.org
+- Create GitHub release
+```
+
+### Artifacts
+
+Each build produces:
+
+- **Test Results**: `test-results.zip` (30-day retention)
+- **NuGet Packages**: `nuget-packages.zip` (90-day retention)
+- **Symbol Packages**: `symbol-packages.zip` (90-day retention)
+
+## Troubleshooting
+
+### Build Errors
+
+**Error: "Duplicate attributes"**
+
+```bash
+dotnet clean
+rm -rf bin/ obj/
+dotnet restore
+dotnet build
+```
+
+**Error: "Missing dependencies"**
+
+```bash
+dotnet clean
+dotnet restore --force-evaluate
+dotnet build
+```
+
+### Test Failures
+
+**Tests fail unexpectedly**
+
+```bash
+# Run tests with detailed output
+dotnet test -c Release --logger "console;verbosity=detailed"
+
+# Run specific test
+dotnet test -c Release --filter "FullyQualifiedName~TestName"
+```
+
+### Publishing Errors
+
+**Error: "403 Forbidden"**
+
+- Verify your NuGet API key is valid
+- Ensure the key has **Push** permissions
+- Check the package name matches your API key scope
+
+**Error: "409 Conflict - Package already exists"**
+
+- Package version already published
+- Use `--skip-duplicate` flag to ignore
+- Increment version number in project file
+
+**Error: "Package validation failed"**
+
+- Ensure package metadata is complete
+- Verify icon file exists (`icon.png`)
+- Check README.md is included
+
+### Workflow Failures
+
+**Workflow doesn't trigger**
+
+- Verify tag format: `v*` (e.g., `v1.0.0`, not `1.0.0`)
+- Check branch protection rules
+- Ensure GitHub Actions is enabled for repository
+
+**NuGet push fails**
+
+- Verify `NUGET_API_KEY` secret is set correctly
+- Check the key hasn't expired
+- Ensure NuGet.org is accessible
+
+## Best Practices
+
+### Pre-Release Checklist
+
+- [ ] All tests pass locally
+- [ ] Documentation is updated
+- [ ] CHANGELOG.md is updated
+- [ ] Version number is incremented
+- [ ] Release notes are prepared
+
+### Release Process
+
+1. **Update version** in `Guardhouse.SDK.csproj`
+2. **Update CHANGELOG.md** with release notes
+3. **Commit changes**: `git commit -am "Release version X.Y.Z"`
+4. **Create tag**: `git tag vX.Y.Z`
+5. **Push tag**: `git push origin vX.Y.Z`
+6. **Monitor workflow** in GitHub Actions
+7. **Verify package** on NuGet.org
+
+### Branch Strategy
+
+- **main**: Production-ready code
+- **develop**: Integration and feature development
+- **feature/***: Feature branches from develop
+- **hotfix/***: Emergency fixes from main
+
+### Quality Gates
+
+Ensure before pushing:
+
+```bash
+# Format code
+dotnet format --verify-no-changes
+
+# Run linters
+dotnet build -c Release
+
+# Run tests
+dotnet test -c Release
+
+# Pack to verify
+dotnet pack -c Release -o ./test-pack
+```
+
+## Configuration
+
+### NuGet.Config (Optional)
+
+Create `NuGet.Config` in repository root for local development:
+
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
-    <add key="guardhouse-sdk" value="https://api.nuget.org/v3/index.json" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
     <add key="local" value="./packages" />
   </packageSources>
-  <packageSourceCredentials>
-    <add key="guardhouse-sdk" value="your-api-key-here" />
-  </packageSourceCredentials>
 </configuration>
 ```
 
-## 📊 Monitoring and Quality
+### Global Settings
 
-### Test Coverage
-The pipeline collects **code coverage** and uploads it as an artifact. Coverage reports are generated using **XPlat Code Coverage**.
-
-### Artifacts
-Each build produces:
-- **NuGet package** (`*.nupkg`)
-- **Symbol package** (`*.snupkg`)
-- **Test results** (`TestResults/`)
-- **Coverage report** (`coverage.xml`)
-
-### Quality Gates
-Consider adding these quality gates to your workflow:
-```yaml
-- name: Check code coverage
-  run: |
-    COVERAGE_THRESHOLD=80
-    if [[ $(grep -oP " covered=" TestResults/coverage.xml | awk -F'"' '{print $2}' | sort -nr | tail -1) -lt $COVERAGE_THRESHOLD ]]; then
-      echo "Coverage below threshold: ${{ grep -oP " covered=" TestResults/coverage.xml | awk -F'"' '{print $2}' | sort -nr | tail -1 }}%"
-      exit 1
-    fi
-```
-
-## 🎯 Release Process
-
-### Before Release
-1. **Ensure all tests pass** in both main and develop
-2. **Update version numbers** in `Guardhouse.SDK.csproj` if needed
-3. **Update CHANGELOG** with release notes
-4. **Create release tag**: `git tag v1.0.0`
-5. **Push tag**: `git push origin v1.0.0`
-
-### Automatic Release
-- **Push to main** or **create tag** triggers automatic release
-- **GitHub Actions** builds, tests, and publishes
-- **NuGet package** becomes available within minutes
-
-### Manual Release
 ```bash
-# Create release tag
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+# Set default API key
+dotnet nuget setapikey YOUR_API_KEY
 
-# Or use GitHub CLI
-gh release create v1.0.0 --generate-notes
+# List configured sources
+dotnet nuget sources list
+
+# Add custom source
+dotnet nuget add source https://custom-feed.com/index.json -n custom
 ```
 
-## 📝 Version Management
+## Monitoring
 
-### Semantic Versioning
-The project follows [Semantic Versioning](https://semver.org/):
-- **MAJOR.MINOR.PATCH** (e.g., 1.0.0)
-- **PRERELEASE** (e.g., 1.0.0-preview)
+### Package Statistics
 
-### Update Process
-1. Update `Guardhouse.SDK.csproj`:
-```xml
-<PropertyGroup>
-    <Version>1.0.1</Version>
-    <PackageReleaseNotes>Fix critical bugs and add new features</PackageReleaseNotes>
-</PropertyGroup>
-```
+- **NuGet.org**: Visit package page for download stats
+- **GitHub Releases**: Check release artifacts
+- **GitHub Actions**: View workflow runs and logs
 
-2. Update version in all files
-3. Run full build/test cycle
-4. Create git tag and push
+### Test Results
 
-## 🔧 Troubleshooting
+- Download test results artifacts from GitHub Actions
+- View test logs for debugging
 
-### Common Issues
-```bash
-# Build fails with duplicate attributes
-rm -rf obj/
-dotnet build
+## Support
 
-# Tests fail with missing dependencies
-dotnet clean
-dotnet restore
-dotnet build
-
-# NuGet push fails
-dotnet nuget push --force
-```
-
-### Clean Build
-```bash
-dotnet clean
-rm -rf bin/
-rm -rf obj/
-dotnet restore
-dotnet build
-```
-
-## 📚 Documentation
-
-### API Documentation
-- **XML Documentation**: Generated with XML documentation file
-- **README**: Always update with new features
-- **CHANGELOG**: Maintain release history
-
-### Code Documentation
-- **XML Comments**: All public APIs documented
-- **Examples**: Include usage examples
-- **Architecture**: Document design decisions
-
-## 🎉 Best Practices
-
-### Pre-commit Hooks
-Consider adding these to your project:
-```bash
-# Install hooks
-dotnet tool install --global dotnet-format
-dotnet tool install --global dotnet-ef
-
-# Add to .git/hooks/pre-commit
-#!/bin/sh
-dotnet format --verify-no-changes
-dotnet test --no-build
-```
-
-### Branch Strategy
-- **main**: Stable releases
-- **develop**: Integration and feature development
-- **feature/*** Feature branches from develop
-- **hotfix/*** Emergency fixes from main
-
-### Pull Request Process
-1. **Create feature branch** from develop
-2. **Implement feature** with tests
-3. **Submit PR** to develop
-4. **Code review** required
-5. **CI/CD** runs on PR
-6. **Merge to develop** after approval
-7. **Periodic merges** develop → main
-
-## 🔗 Resources
-
-### Documentation
-- [NuGet Documentation](https://docs.microsoft.com/en-us/nuget/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [.NET SDK Documentation](https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet/)
-
-### Tools
-- [NuGet Explorer](https://nuget.org/)
-- [Package Explorer](https://packageexplorer.io/)
-- [GitHub Releases](https://github.com/guardhouse/guardhouse-sdk-dotnet/releases)
-
-### Support
-- **Issues**: [GitHub Issues](https://github.com/guardhouse/guardhouse-sdk-dotnet/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/guardhouse/guardhouse-sdk-dotnet/discussions)
+- **Documentation**: https://docs.guardhouse.cloud
+- **GitHub Issues**: https://github.com/legiosoft/guardhouse-sdk-dotnet/issues
 - **Email**: support@guardhouse.com
 
----
+## Additional Resources
 
-*This guide covers all aspects of deploying the Guardhouse SDK. For additional help, please open an issue or contact the support team.*
+- [NuGet Documentation](https://docs.microsoft.com/nuget/)
+- [GitHub Actions Documentation](https://docs.github.com/actions)
+- [.NET SDK Documentation](https://docs.microsoft.com/dotnet/)
+- [Semantic Versioning](https://semver.org/)
