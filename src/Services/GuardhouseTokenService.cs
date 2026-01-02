@@ -21,10 +21,6 @@ public class GuardhouseTokenService(
     ILogger<GuardhouseTokenService> logger,
     IClock? clock = null) : IGuardhouseTokenService
 {
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly IMemoryCache _memoryCache = memoryCache;
-    private readonly IOptions<GuardhouseClientOptions> _options = options;
-    private readonly ILogger<GuardhouseTokenService> _logger = logger;
     private readonly IClock _clock = clock ?? SystemClock.Instance;
 
     private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = options.Value.EnableHttpResilience
@@ -34,7 +30,7 @@ public class GuardhouseTokenService(
             .WaitAndRetryAsync(
                 options.Value.MaxRetryAttempts,
                 retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)),
-                onRetry: (outcome, timespan, retryAttempt, context) =>
+                onRetry: (outcome, timespan, retryAttempt, _) =>
                 {
                     logger.LogWarning(
                         "Request failed with {StatusCode}. Retrying in {Delay}s (attempt {Attempt}/{MaxAttempts})",
@@ -45,63 +41,84 @@ public class GuardhouseTokenService(
                 })
         : Policy.NoOpAsync<HttpResponseMessage>();
 
-    private const string TokenCacheKey = "guardhouse_access_token";
-    private const string RefreshTokenCacheKey = "guardhouse_refresh_token";
+    private static readonly SemaphoreSlim TokenLock = new(1, 1);
+
+    private string GetTokenCacheKey() => $"guardhouse_access_token_{options.Value.ClientId}";
+    private string GetRefreshTokenCacheKey() => $"guardhouse_refresh_token_{options.Value.ClientId}";
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
-        var options = _options.Value;
+        var options1 = options.Value;
 
-        if (options.EnableTokenCaching && _memoryCache.TryGetValue(TokenCacheKey, out TokenResponse? cachedToken))
+        if (options1.EnableTokenCaching && memoryCache.TryGetValue(GetTokenCacheKey(), out TokenResponse? cachedToken))
         {
-            if (cachedToken != null && !cachedToken.IsExpired(options.CacheExpirationBufferSeconds))
+            if (cachedToken != null && !cachedToken.IsExpired(options1.CacheExpirationBufferSeconds))
             {
-                _logger.LogDebug("Using cached access token");
+                logger.LogDebug("Using cached access token");
                 return cachedToken.AccessToken;
             }
 
-            _logger.LogDebug("Cached token expired, requesting new token");
+            logger.LogDebug("Cached token expired, requesting new token");
         }
 
-        if (options.EnableTokenRefresh && _memoryCache.TryGetValue(RefreshTokenCacheKey, out string? cachedRefreshToken))
+        await TokenLock.WaitAsync(cancellationToken);
+        try
         {
-            try
+            if (options1.EnableTokenCaching && memoryCache.TryGetValue(GetTokenCacheKey(), out cachedToken))
             {
-                var refreshedToken = await RefreshTokenAsync(cachedRefreshToken!, cancellationToken);
-                CacheToken(refreshedToken);
-                return refreshedToken.AccessToken;
+                if (cachedToken != null && !cachedToken.IsExpired(options1.CacheExpirationBufferSeconds))
+                {
+                    logger.LogDebug("Using cached access token (double-checked)");
+                    return cachedToken.AccessToken;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to refresh token, requesting new token");
-            }
-        }
 
-        var newToken = await RequestTokenAsync(cancellationToken);
-        CacheToken(newToken);
-        return newToken.AccessToken;
+            if (options1.EnableTokenRefresh && memoryCache.TryGetValue(GetRefreshTokenCacheKey(), out string? cachedRefreshToken))
+            {
+                try
+                {
+                    var refreshedToken = await RefreshTokenAsync(cachedRefreshToken!, cancellationToken);
+                    CacheToken(refreshedToken);
+                    return refreshedToken.AccessToken;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to refresh token, requesting new token");
+                }
+            }
+
+            var newToken = await RequestTokenAsync(cancellationToken);
+            CacheToken(newToken);
+            return newToken.AccessToken;
+        }
+        finally
+        {
+            TokenLock.Release();
+        }
     }
 
     public async Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken = default)
     {
-        var options = _options.Value;
-        var tokenEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
+        var options1 = options.Value;
+        var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        request.Content = new FormUrlEncodedContent([
-            new KeyValuePair<string, string>("client_id", options.ClientId),
-            new KeyValuePair<string, string>("client_secret", options.ClientSecret),
-            new KeyValuePair<string, string>("grant_type", "client_credentials"),
-            new KeyValuePair<string, string>("scope", options.Scope)
-        ]);
+        logger.LogDebug("Requesting new token from {TokenEndpoint}", tokenEndpoint);
 
-        _logger.LogDebug("Requesting new token from {TokenEndpoint}", tokenEndpoint);
-
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         var response = await _retryPolicy.ExecuteAsync(
-            async (ct) => await _httpClient.SendAsync(request, ct),
+            async (ct) =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+                request.Content = new FormUrlEncodedContent([
+                    new KeyValuePair<string, string>("client_id", options1.ClientId),
+                    new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
+                    new KeyValuePair<string, string>("grant_type", "client_credentials"),
+                    new KeyValuePair<string, string>("scope", options1.Scope)
+                ]);
+                return await httpClient.SendAsync(request, ct);
+            },
             combinedCts.Token);
 
         response.EnsureSuccessStatusCode();
@@ -112,31 +129,33 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        _logger.LogDebug("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogDebug("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse;
     }
 
     public async Task<TokenResponse> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var options = _options.Value;
-        var tokenEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
+        var options1 = options.Value;
+        var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        request.Content = new FormUrlEncodedContent([
-            new KeyValuePair<string, string>("client_id", options.ClientId),
-            new KeyValuePair<string, string>("client_secret", options.ClientSecret),
-            new KeyValuePair<string, string>("grant_type", "refresh_token"),
-            new KeyValuePair<string, string>("refresh_token", refreshToken)
-        ]);
+        logger.LogDebug("Refreshing token from {TokenEndpoint}", tokenEndpoint);
 
-        _logger.LogDebug("Refreshing token from {TokenEndpoint}", tokenEndpoint);
-
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         var response = await _retryPolicy.ExecuteAsync(
-            async (ct) => await _httpClient.SendAsync(request, ct),
+            async (ct) =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+                request.Content = new FormUrlEncodedContent([
+                    new KeyValuePair<string, string>("client_id", options1.ClientId),
+                    new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
+                    new KeyValuePair<string, string>("grant_type", "refresh_token"),
+                    new KeyValuePair<string, string>("refresh_token", refreshToken)
+                ]);
+                return await httpClient.SendAsync(request, ct);
+            },
             combinedCts.Token);
 
         response.EnsureSuccessStatusCode();
@@ -147,30 +166,32 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        _logger.LogDebug("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogDebug("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse;
     }
 
     public async Task<IntrospectionResponse> IntrospectTokenAsync(string token, CancellationToken cancellationToken = default)
     {
-        var options = _options.Value;
-        var introspectionEndpoint = $"{options.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
+        var options1 = options.Value;
+        var introspectionEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-        request.Content = new FormUrlEncodedContent([
-            new KeyValuePair<string, string>("client_id", options.ClientId),
-            new KeyValuePair<string, string>("client_secret", options.ClientSecret),
-            new KeyValuePair<string, string>("token", token)
-        ]);
+        logger.LogDebug("Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
 
-        _logger.LogDebug("Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
-
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         var response = await _retryPolicy.ExecuteAsync(
-            async (ct) => await _httpClient.SendAsync(request, ct),
+            async (ct) =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
+                request.Content = new FormUrlEncodedContent([
+                    new KeyValuePair<string, string>("token", token)
+                ]);
+                var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{options1.ClientId}:{options1.ClientSecret}"));
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+                return await httpClient.SendAsync(request, ct);
+            },
             combinedCts.Token);
 
         response.EnsureSuccessStatusCode();
@@ -181,7 +202,7 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
 
-        _logger.LogDebug("Token introspection completed, active: {Active}", introspectionResponse.Active);
+        logger.LogDebug("Token introspection completed, active: {Active}", introspectionResponse.Active);
 
         return introspectionResponse;
     }
@@ -195,18 +216,18 @@ public class GuardhouseTokenService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to check token activity");
+            logger.LogError(ex, "Failed to check token activity");
             return false;
         }
     }
 
     private void CacheToken(TokenResponse tokenResponse)
     {
-        var options = _options.Value;
+        var options1 = options.Value;
 
-        if (options.EnableTokenCaching)
+        if (options1.EnableTokenCaching)
         {
-            var cacheExpiration = Duration.FromSeconds(tokenResponse.ExpiresIn - options.CacheExpirationBufferSeconds);
+            var cacheExpiration = Duration.FromSeconds(tokenResponse.ExpiresIn - options1.CacheExpirationBufferSeconds);
             if (cacheExpiration > Duration.Zero)
             {
                 var expirationInstant = _clock.GetCurrentInstant().Plus(cacheExpiration);
@@ -215,8 +236,8 @@ public class GuardhouseTokenService(
                     AbsoluteExpirationRelativeToNow = cacheExpiration.ToTimeSpan()
                 };
 
-                _memoryCache.Set(TokenCacheKey, tokenResponse, cacheOptions);
-                _logger.LogDebug("Cached access token until {ExpirationInstant}", expirationInstant);
+                memoryCache.Set(GetTokenCacheKey(), tokenResponse, cacheOptions);
+                logger.LogDebug("Cached access token until {ExpirationInstant}", expirationInstant);
             }
 
             if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
@@ -227,8 +248,8 @@ public class GuardhouseTokenService(
                     AbsoluteExpirationRelativeToNow = refreshCacheExpiration.ToTimeSpan()
                 };
 
-                _memoryCache.Set(RefreshTokenCacheKey, tokenResponse.RefreshToken, refreshCacheOptions);
-                _logger.LogDebug("Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
+                memoryCache.Set(GetRefreshTokenCacheKey(), tokenResponse.RefreshToken, refreshCacheOptions);
+                logger.LogDebug("Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
             }
         }
     }
