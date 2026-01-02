@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-internal class GuardhouseJwtBearerOptionsConfigurer(IOptions<GuardhouseResourceOptions> resourceOptions)
+internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions> resourceOptions)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
     private const string GuardhouseSchemeName = "Guardhouse";

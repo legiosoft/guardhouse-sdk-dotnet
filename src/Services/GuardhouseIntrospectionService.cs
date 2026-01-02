@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NodaTime;
 
-internal class GuardhouseIntrospectionService(
+public class GuardhouseIntrospectionService(
     HttpClient httpClient,
     IMemoryCache memoryCache,
     IOptions<GuardhouseResourceOptions> options,

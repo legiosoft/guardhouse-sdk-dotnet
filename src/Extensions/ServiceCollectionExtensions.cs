@@ -74,8 +74,8 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>();
         services.AddScoped<IGuardhouseResourceService, GuardhouseResourceService>();
-        services.AddSingleton<IConfigureOptions<JwtBearerOptions>, GuardhouseJwtBearerOptionsConfigurer>();
-        services.AddSingleton<IConfigureNamedOptions<JwtBearerOptions>, GuardhouseJwtBearerOptionsConfigurer>();
+        services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
+        services.AddSingleton<IConfigureNamedOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
 
         return services;
     }

@@ -7,8 +7,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using NodaTime;
-using NodaTime.Testing;
+using Moq.Protected;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Services;
@@ -19,7 +18,6 @@ public class GuardhouseIntrospectionServiceTests
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _memoryCache;
     private readonly Mock<ILogger<GuardhouseIntrospectionService>> _mockLogger;
-    private readonly FakeClock _testClock;
     private readonly IOptions<GuardhouseResourceOptions> _options;
 
     public GuardhouseIntrospectionServiceTests()
@@ -28,7 +26,6 @@ public class GuardhouseIntrospectionServiceTests
         _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
         _mockLogger = new Mock<ILogger<GuardhouseIntrospectionService>>();
-        _testClock = new FakeClock(SystemClock.Instance.GetCurrentInstant());
 
         _options = Options.Create(new GuardhouseResourceOptions
         {
@@ -46,8 +43,7 @@ public class GuardhouseIntrospectionServiceTests
             _httpClient,
             _memoryCache,
             _options,
-            _mockLogger.Object,
-            _testClock);
+            _mockLogger.Object);
     }
 
     #region Introspection Tests

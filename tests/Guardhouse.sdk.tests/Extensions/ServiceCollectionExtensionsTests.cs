@@ -8,6 +8,9 @@ using Xunit;
 
 namespace Guardhouse.SDK.Tests.Extensions;
 
+using Microsoft.Extensions.Caching.Memory;
+using SDK.Services;
+
 public class ServiceCollectionExtensionsTests
 {
     [Fact]

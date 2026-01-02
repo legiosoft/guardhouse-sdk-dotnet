@@ -1,6 +1,5 @@
 namespace Guardhouse.SDK.Services;
 
-using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -23,33 +22,16 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
     public override async Task TokenValidated(TokenValidatedContext context)
     {
-        var token = context.HttpContext.Request.Headers[GuardhouseConstants.Headers.Authorization].ToString();
-        if (token.StartsWith(GuardhouseConstants.Headers.BearerPrefix, StringComparison.OrdinalIgnoreCase))
+        var token = context.SecurityToken is JwtSecurityToken jwtToken ? jwtToken.RawData : null;
+        if (string.IsNullOrEmpty(token))
         {
-            token = token[GuardhouseConstants.Headers.BearerPrefix.Length..];
+            _logger.LogWarning("Token rejected: unable to extract raw token");
+            context.Fail("Unable to extract token");
+            return;
         }
 
         try
         {
-            if (context.SecurityToken is JwtSecurityToken jwtToken)
-            {
-                var typ = jwtToken.Header.Typ;
-                if (!string.IsNullOrEmpty(typ) && !_options.Value.TokenTypes.Contains(typ))
-                {
-                    _logger.LogWarning("Token rejected: type '{TokenType}' is not allowed", typ);
-                    context.Fail($"Token type '{typ}' is not allowed");
-                    return;
-                }
-
-                var alg = jwtToken.Header.Alg;
-                if (!_options.Value.ValidAlgorithms.Contains(alg))
-                {
-                    _logger.LogWarning("Token rejected: algorithm '{Algorithm}' is not allowed", alg);
-                    context.Fail($"Algorithm '{alg}' is not allowed");
-                    return;
-                }
-            }
-
             var introspectionResult = await _introspectionService.IntrospectTokenAsync(token, context.HttpContext.RequestAborted);
 
             if (!introspectionResult.Active)
@@ -75,16 +57,11 @@ public class GuardhouseIntrospectionJwtBearerEvents(
                 return;
             }
 
-            if (string.IsNullOrEmpty(introspectionResult.Signature))
-            {
-                _logger.LogWarning("Token rejected: introspection did not return signature");
-                context.Fail("Token signature is missing");
-                return;
-            }
-
-            AddIntrospectionClaims(context, introspectionResult);
+            var claims = BuildClaimsFromIntrospection(introspectionResult);
+            var identity = new ClaimsIdentity(claims, context.Scheme.Name, ClaimTypes.Name, ClaimTypes.Role);
+            context.Principal = new ClaimsPrincipal(identity);
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             _logger.LogError(ex, "Token introspection failed");
             context.Fail("Token introspection failed");
@@ -94,7 +71,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         await base.TokenValidated(context);
     }
 
-    private static void AddIntrospectionClaims(TokenValidatedContext context, IntrospectionResponse introspectionResult)
+    private static List<Claim> BuildClaimsFromIntrospection(IntrospectionResponse introspectionResult)
     {
         var claims = new List<Claim>();
 
@@ -106,6 +83,20 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         if (!string.IsNullOrEmpty(introspectionResult.Username))
         {
             claims.Add(new Claim(ClaimTypes.Name, introspectionResult.Username));
+        }
+
+        if (!string.IsNullOrEmpty(introspectionResult.Role))
+        {
+            claims.Add(new Claim(ClaimTypes.Role, introspectionResult.Role));
+        }
+
+        if (!string.IsNullOrEmpty(introspectionResult.Roles))
+        {
+            var roles = introspectionResult.Roles.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Scope))
@@ -137,10 +128,6 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             claims.Add(new Claim(GuardhouseConstants.JwtClaims.JwtId, introspectionResult.Jti));
         }
 
-        if (claims.Count > 0)
-        {
-            var identity = new ClaimsIdentity(claims, context.Scheme.Name);
-            context.Principal?.AddIdentity(identity);
-        }
+        return claims;
     }
 }

@@ -47,6 +47,12 @@ public class IntrospectionResponse
     [JsonPropertyName("jti")]
     public string? Jti { get; set; }
 
+    [JsonPropertyName("role")]
+    public string? Role { get; set; }
+
+    [JsonPropertyName("roles")]
+    public string? Roles { get; set; }
+
     public Instant? ExpiresAt => Exp.HasValue ? Instant.FromUnixTimeSeconds(Exp.Value) : null;
 
     public Instant? IssuedAt => Iat.HasValue ? Instant.FromUnixTimeSeconds(Iat.Value) : null;
