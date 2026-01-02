@@ -1,272 +1,214 @@
-# Guardhouse .NET Example Client
+# Example Client Application
 
-This is a complete example demonstrating how to use the Guardhouse SDK in a .NET Web API application.
+This example demonstrates how to use Guardhouse SDK as a **Client** application that requests access tokens and calls protected APIs.
 
-## Features
+## What This Example Shows
 
-- **OpenID Connect Client Integration**: Full OAuth2/OpenID Connect client functionality using Guardhouse SDK
-- **JWT Bearer Authentication**: Protect API endpoints with JWT token validation
-- **Authorization Policies**: Multiple authorization policies based on scopes and roles
-- **Swagger with OAuth2**: Interactive API documentation with OAuth2 authorization
-- **Token Management**: Automatic token request, caching, and refresh
-- **Clean Architecture**: Organized folder structure following 1 class = 1 file rule
+- **Client Configuration**: Setting up Guardhouse SDK with credentials
+- **Token Management**: Requesting and caching access tokens
+- **API Authentication**: Using tokens to call protected endpoints
+- **Product CRUD Operations**: Create, read, update, and delete products
+- **Authorization Policies**: Protecting endpoints with `[Authorize]` attribute
 
-## Project Structure
+## Prerequisites
 
-```
-ExampleClient/
-├── Controllers/               # API Controllers
-│   ├── WeatherController.cs      # Public and protected weather endpoints
-│   ├── UsersController.cs         # User profile and admin endpoints
-│   ├── ProductsController.cs      # Products CRUD with different access levels
-│   └── TokenInfoController.cs     # Token and claims inspection endpoints
-├── DTOs/                     # Data Transfer Objects
-│   └── CreateProductRequest.cs    # Product creation DTO
-├── Extensions/              # Extension methods for service configuration
-│   ├── SwaggerExtensions.cs       # Swagger/OpenAPI configuration
-│   ├── AuthorizationExtensions.cs # Authorization policies setup
-│   └── GuardhouseExtensions.cs    # Guardhouse SDK configuration
-├── Models/                   # Domain models
-│   ├── Product.cs                  # Product entity
-│   └── WeatherForecast.cs          # Weather forecast model
-├── Services/                 # Business logic and data access
-│   └── ProductService.cs           # Product service interface and implementation
-├── Program.cs                # Application entry point
-├── appsettings.json         # Configuration file
-├── Properties/
-│   └── launchSettings.json  # Launch profiles
-└── ExampleClient.csproj     # Project file
-```
-
-## Architecture Principles
-
-This example follows these best practices:
-
-- **1 Class = 1 File Rule**: Each class is in its own file for better maintainability
-- **Separation of Concerns**: Controllers, Services, DTOs, and Models are separated
-- **Extension Methods**: Configuration logic is encapsulated in extension methods
-- **Dependency Injection**: Services are registered in DI container and injected via constructors
+- .NET 8.0 SDK
+- Guardhouse Cloud account
+- Guardhouse Client ID and Client Secret
 
 ## Configuration
 
-Update the `appsettings.json` file with your Guardhouse server details:
+1. Copy this project and update `appsettings.json`:
 
 ```json
 {
   "Guardhouse": {
     "Authority": "https://your-guardhouse-server.com",
-    "ClientId": "example-client",
-    "ClientSecret": "your-client-secret-here",
-    "Scope": "api",
-    "Audience": "api"
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "Scope": "api"
   }
 }
 ```
 
+2. Replace the placeholder values with your actual Guardhouse credentials.
+
 ## Running the Example
 
-1. **Restore dependencies:**
+```bash
+cd ExampleClient
+dotnet run
+```
 
-   ```bash
-   cd examples/ExampleClient
-   dotnet restore
-   ```
-
-2. **Build the project:**
-
-   ```bash
-   dotnet build
-   ```
-
-3. **Run the application:**
-
-   ```bash
-   dotnet run
-   ```
-
-4. **Access Swagger UI:**
-
-   Open your browser and navigate to:
-   - HTTP: `http://localhost:5000/swagger`
-   - HTTPS: `https://localhost:5001/swagger`
+The API will be available at:
+- HTTP: `http://localhost:5000`
+- HTTPS: `https://localhost:5001`
 
 ## API Endpoints
 
-### Weather Endpoints
+### Public Endpoints (No Authentication Required)
 
-- `GET /api/weather` - Public endpoint (no authentication required)
-- `GET /api/weather/protected` - Protected endpoint (authentication required)
+- `GET /api/products` - Get all products
 
-### User Endpoints
+### Protected Endpoints (Authentication Required)
 
-- `GET /api/users/profile` - Requires `read` or `api` scope
-- `GET /api/users/all` - Requires `admin` scope
+- `GET /api/products/{id}` - Get a specific product
+- `POST /api/products` - Create a new product
+- `DELETE /api/products/{id}` - Delete a product
 
-### Product Endpoints
+### Token Information
 
-- `GET /api/products` - Public endpoint
-- `GET /api/products/{id}` - Requires `read` or `api` scope
-- `POST /api/products` - Requires `write` or `admin` scope
-- `DELETE /api/products/{id}` - Requires `admin` scope
+- `GET /api/tokeninfo/info` - Get information about the current authentication token
 
-### Token Info Endpoints
+## Testing with Swagger
 
-- `GET /api/tokeninfo/claims` - View all claims in the JWT token
-- `GET /api/tokeninfo/user-info` - View user information from token
-- `GET /api/tokeninfo/authorize-info` - View authorization details
+When running in Development mode, Swagger UI is available at:
+```
+https://localhost:5001/swagger
+```
 
-## Using Swagger with OAuth2
-
-1. Click the **Authorize** button (🔒) in Swagger UI
+To test protected endpoints in Swagger:
+1. Click the **"Authorize"** button (🔒) at the top right
 2. Enter your Guardhouse client credentials
-3. Click **Authorize** to authenticate
-4. The access token will be included in all subsequent API requests
-
-## Authorization Policies
-
-### ReadAccess
-Requires `read` or `api` scope. Use for read operations.
-
-### WriteAccess
-Requires `write` or `admin` scope. Use for write operations.
-
-### AdminOnly
-Requires `admin` scope. Use for administrative operations.
+3. Click **"Authorize"** to authenticate
+4. All protected endpoints will now include the access token
 
 ## How It Works
 
-### Guardhouse SDK Setup
+### 1. Client Setup
 
-The application uses extension methods to configure Guardhouse:
-
-```csharp
-builder.Services.AddCustomGuardhouse(builder.Configuration);
-```
-
-This internally calls:
-- `AddCustomGuardhouseClient` - For token management
-- `AddCustomGuardhouseResource` - For API protection
-
-### Swagger Configuration
-
-Swagger is configured using an extension method in `SwaggerExtensions.cs`:
+In `Program.cs`, we configure the Guardhouse SDK as a client:
 
 ```csharp
-builder.Services.AddCustomSwaggerGen();
+builder.Services.AddGuardhouseClient(options =>
+{
+    options.Authority = "https://your-guardhouse-server.com";
+    options.ClientId = "your-client-id";
+    options.ClientSecret = "your-client-secret";
+    options.Scope = "api";
+    options.EnableTokenCaching = true;
+    options.EnableTokenRefresh = true;
+});
 ```
 
-This includes OAuth2 security scheme and scopes configuration.
+### 2. Token Management
 
-### Authorization Policies
+The SDK automatically handles:
+- **Token Caching**: Stores tokens in memory to avoid unnecessary requests
+- **Token Refresh**: Automatically refreshes tokens when they're about to expire
+- **Retry Logic**: Retries failed requests with exponential backoff
 
-Authorization policies are configured in `AuthorizationExtensions.cs`:
+### 3. Protected API Calls
 
-```csharp
-builder.Services.AddCustomAuthorization();
-```
-
-### Service Layer
-
-The `ProductsController` demonstrates clean separation of concerns by using `IProductService`:
+In controllers, we inject `IGuardhouseTokenService` and use it to get access tokens:
 
 ```csharp
 public class ProductsController : ControllerBase
 {
-    private readonly IProductService _productService;
     private readonly IGuardhouseTokenService _tokenService;
 
     public ProductsController(IProductService productService, IGuardhouseTokenService tokenService)
     {
-        _productService = productService;
         _tokenService = tokenService;
+    }
+
+    [HttpPost]
+    [Authorize]
+    public async Task<ActionResult<Product>> Create([FromBody] CreateProductRequest request)
+    {
+        // Get access token (cached or requested)
+        var accessToken = await _tokenService.GetAccessTokenAsync();
+        
+        // Create product
+        var newProduct = _productService.Create(request);
+        
+        return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, newProduct);
     }
 }
 ```
 
-### Token Usage
+### 4. Authorization
 
-The `ProductsController` demonstrates how to use the token service to get access tokens for downstream API calls:
+The `[Authorize]` attribute protects endpoints. Only requests with valid Guardhouse tokens can access protected endpoints.
+
+## Security Features
+
+This example demonstrates the following security features:
+
+✅ **Automatic Token Management** - No manual token handling required
+✅ **Token Caching** - Reduces server load and improves performance
+✅ **Automatic Refresh** - Tokens are refreshed before expiration
+✅ **HTTP Resilience** - Built-in retry policies for transient failures
+✅ **Secure Token Storage** - Tokens are stored securely in memory
+✅ **Protected Endpoints** - Sensitive operations require valid authentication
+
+## Next Steps
+
+After running this example:
+
+1. **Create a Resource Server**: See the ExampleResource project to learn how to protect APIs
+2. **Configure Your Guardhouse Cloud**: Set up clients and APIs in Guardhouse Cloud
+3. **Customize Token Handling**: Extend the example to handle specific token requirements
+4. **Add Authorization Policies**: Implement role-based or scope-based access control
+
+## Common Scenarios
+
+### Calling External APIs
 
 ```csharp
-public async Task<ActionResult<Product>> Create([FromBody] CreateProductRequest request)
+public async Task<string> CallExternalApi()
 {
-    var newProduct = _productService.Create(request);
-
     var accessToken = await _tokenService.GetAccessTokenAsync();
     
-    return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
-    {
-        Product = newProduct,
-        CurrentAccessToken = accessToken.Substring(0, 20) + "..."
-    });
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.Authorization = 
+        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    
+    var response = await client.GetAsync("https://external-api.com/data");
+    return await response.Content.ReadAsStringAsync();
 }
 ```
 
-### Authorization
-
-Controllers use the `[Authorize]` attribute with policies:
+### Batch Operations with Token Reuse
 
 ```csharp
-[Authorize(Policy = "ReadAccess")]
-public ActionResult GetUserProfile()
+public async Task ProcessMultipleRequests()
 {
-    // Only users with 'read' or 'api' scope can access
-}
-
-[Authorize(Policy = "AdminOnly")]
-public ActionResult Delete(int id)
-{
-    // Only users with 'admin' scope can access
+    var accessToken = await _tokenService.GetAccessTokenAsync();
+    
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.Authorization = 
+        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    
+    // All requests use the same token
+    var tasks = endpoints.Select(endpoint => 
+        client.GetAsync(endpoint));
+    
+    await Task.WhenAll(tasks);
 }
 ```
-
-## Extension Methods
-
-### SwaggerExtensions
-- `AddCustomSwaggerGen()` - Configures Swagger with OAuth2 support
-
-### AuthorizationExtensions
-- `AddCustomAuthorization()` - Sets up authorization policies
-
-### GuardhouseExtensions
-- `AddCustomGuardhouseClient()` - Configures Guardhouse client for token management
-- `AddCustomGuardhouseResource()` - Configures Guardhouse resource server for API protection
-- `AddCustomGuardhouse()` - Configures both client and resource in one call
-
-## Required Scopes
-
-Make sure your Guardhouse client is configured with the following scopes:
-
-- `api` - Basic API access
-- `read` - Read operations
-- `write` - Write operations
-- `admin` - Administrative operations
 
 ## Troubleshooting
 
-### 401 Unauthorized
+### "401 Unauthorized" Errors
 
-- Ensure you've authenticated in Swagger UI
-- Check that your token has the required scope for the endpoint
-- Verify the Guardhouse authority URL is correct
+- Verify your Client ID and Secret are correct
+- Check that the Authority URL is correct
+- Ensure your client is enabled in Guardhouse Cloud
 
-### 403 Forbidden
+### Token Expiration Issues
 
-- Your token is valid but lacks the required scope
-- Check the `/api/tokeninfo/authorize-info` endpoint to see your current scopes
+- The SDK automatically refreshes tokens
+- Enable `EnableTokenRefresh = true` in configuration
+- Check your client's refresh token settings in Guardhouse Cloud
 
-### Connection Issues
+### CORS Issues
 
-- Ensure your Guardhouse server is accessible
-- Check firewall and network settings
-- Verify the Authority URL in `appsettings.json`
+- Ensure Guardhouse Cloud allows your application's origin
+- Add your development server URL to allowed origins
 
-## Learn More
+## Support
 
-- [Guardhouse SDK Documentation](../../README.md)
-- [Guardhouse Official Documentation](https://docs.guardhouse.com)
-- [.NET Authentication Documentation](https://docs.microsoft.com/aspnet/core/security/authentication/)
-
-## License
-
-This example is part of the Guardhouse SDK and is licensed under the MIT License.
+- Guardhouse SDK Documentation: https://docs.guardhouse.cloud
+- GitHub Issues: https://github.com/guardhouse/guardhouse-sdk-dotnet/issues
+- Guardhouse Cloud: https://guardhouse.cloud

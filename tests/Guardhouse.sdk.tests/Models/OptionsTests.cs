@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using FluentAssertions;
+using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Models;
 
-/// <summary>
-/// Unit tests for configuration options
-/// </summary>
 public class OptionsTests
 {
     [Fact]
@@ -17,17 +13,11 @@ public class OptionsTests
     {
         var options = new GuardhouseClientOptions();
 
-        // Missing required fields
-        var validationResults = new List<ValidationResult>();
-
-        options.Authority = string.Empty;
-        options.ClientId = string.Empty;
-        options.ClientSecret = string.Empty;
-
-        // Should fail validation
-        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
+        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var isValid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(options, new System.ComponentModel.DataAnnotations.ValidationContext(options), validationResults);
 
         isValid.Should().BeFalse();
+        validationResults.Should().HaveCountGreaterOrEqualTo(3);
     }
 
     [Fact]
@@ -43,32 +33,148 @@ public class OptionsTests
             EnableTokenRefresh = true,
             CacheExpirationBufferSeconds = 60,
             RequestTimeoutSeconds = 30,
-            MaxRetryAttempts = 3
+            MaxRetryAttempts = 3,
+            EnableHttpResilience = true
         };
 
-        var validationResults = new List<ValidationResult>();
-        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
+        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var isValid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(options, new System.ComponentModel.DataAnnotations.ValidationContext(options), validationResults);
 
         isValid.Should().BeTrue();
     }
 
     [Fact]
-    public void GuardhouseResourceOptions_WithIntrospection_ShouldNotRequireClientCredentialsByDefault()
+    public void GuardhouseClientOptions_DefaultValues_ShouldBeCorrect()
     {
-        var options = new GuardhouseResourceOptions
+        var options = new GuardhouseClientOptions();
+
+        options.Authority.Should().Be(string.Empty);
+        options.ClientId.Should().Be(string.Empty);
+        options.ClientSecret.Should().Be(string.Empty);
+        options.Scope.Should().Be("api");
+        options.EnableTokenCaching.Should().BeTrue();
+        options.EnableTokenRefresh.Should().BeTrue();
+        options.CacheExpirationBufferSeconds.Should().Be(60);
+        options.RequestTimeoutSeconds.Should().Be(30);
+        options.MaxRetryAttempts.Should().Be(3);
+        options.EnableHttpResilience.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_WithIntrospectionMode_MissingClientId_ShouldFailValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
         {
-            Authority = "https://test-guardhouse.com",
-            Audience = "test-audience",
-            EnableIntrospection = true,
-            IntrospectionClientId = string.Empty,
-            IntrospectionClientSecret = "test-secret"
-        };
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = string.Empty;
+            options.IntrospectionClientSecret = "test-secret";
+        });
 
-        var validationResults = new List<ValidationResult>();
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*IntrospectionClientId is required*");
+    }
 
-        // Should pass - no conditional validation attributes
-        var isValid = Validator.TryValidateObject(options, new ValidationContext(options), validationResults);
-        isValid.Should().BeTrue();
+    [Fact]
+    public void GuardhouseResourceOptions_WithIntrospectionMode_MissingClientSecret_ShouldFailValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = "test-client";
+            options.IntrospectionClientSecret = string.Empty;
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*IntrospectionClientSecret is required*");
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_WithIntrospectionMode_WithValidCredentials_ShouldPassValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = "test-client";
+            options.IntrospectionClientSecret = "test-secret";
+        });
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_WithJwtSignatureMode_ShouldNotRequireIntrospectionCredentials()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.JwtSignature;
+            options.IntrospectionClientId = string.Empty;
+            options.IntrospectionClientSecret = string.Empty;
+        });
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_MissingAuthority_ShouldFailValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = string.Empty;
+            options.Audience = "test-audience";
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*Authority is required*");
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_MissingAudience_ShouldFailValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = string.Empty;
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*Audience is required*");
+    }
+
+    [Fact]
+    public void GuardhouseResourceOptions_WithValidJwtSignatureMode_ShouldPassValidation()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test-guardhouse.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.JwtSignature;
+            options.ValidAlgorithms = new[] { "RS256" };
+            options.TokenTypes = new[] { "JWT" };
+        });
+
+        act.Should().NotThrow();
     }
 
     [Fact]
@@ -77,12 +183,18 @@ public class OptionsTests
         var options = new GuardhouseResourceOptions();
 
         options.Authority.Should().Be(string.Empty);
-        options.Audience.Should().BeNull();
+        options.Audience.Should().Be("my_resource_api");
+        options.ValidationMode.Should().Be(TokenValidationMode.JwtSignature);
         options.EnableIntrospection.Should().BeFalse();
         options.PolicyName.Should().Be("Guardhouse");
         options.ValidateIssuer.Should().BeTrue();
         options.ValidateAudience.Should().BeTrue();
         options.ValidateLifetime.Should().BeTrue();
-        options.ClockSkew.Should().Be(TimeSpan.FromMinutes(5));
+        options.ValidateIssuerSigningKey.Should().BeTrue();
+        options.RequireHttpsMetadata.Should().BeNull();
+        options.JwksCacheDurationHours.Should().Be(24);
+        options.JwksRefreshIntervalMinutes.Should().Be(5);
+        options.ValidAlgorithms.Should().Contain("RS256");
+        options.TokenTypes.Should().Contain("JWT");
     }
 }

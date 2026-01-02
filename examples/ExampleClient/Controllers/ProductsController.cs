@@ -21,17 +21,18 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    [AllowAnonymous]
     public ActionResult<IEnumerable<Product>> GetAll()
     {
         return Ok(_productService.GetAll());
     }
 
     [HttpGet("{id}")]
-    [Authorize(Policy = "ReadAccess")]
-    public ActionResult<Product> GetById(int id)
+    [Authorize]
+    public async Task<ActionResult<Product>> GetById(int id)
     {
+        var accessToken = await _tokenService.GetAccessTokenAsync();
         var product = _productService.GetById(id);
+        
         if (product == null)
         {
             return NotFound();
@@ -40,30 +41,28 @@ public class ProductsController : ControllerBase
         return Ok(new
         {
             Product = product,
-            AccessedBy = User.Identity?.Name,
-            Message = "This product detail requires read access"
+            AccessToken = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+            Message = "Product retrieved successfully"
         });
     }
 
     [HttpPost]
-    [Authorize(Policy = "WriteAccess")]
+    [Authorize]
     public async Task<ActionResult<Product>> Create([FromBody] CreateProductRequest request)
     {
         var newProduct = _productService.Create(request);
-
         var accessToken = await _tokenService.GetAccessTokenAsync();
-
+        
         return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
         {
             Product = newProduct,
-            CreatedBy = User.Identity?.Name,
-            CurrentAccessToken = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
-            Message = "Product created successfully using write access"
+            AccessToken = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+            Message = "Product created successfully"
         });
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize]
     public ActionResult Delete(int id)
     {
         var product = _productService.GetById(id);
@@ -71,13 +70,12 @@ public class ProductsController : ControllerBase
         {
             return NotFound();
         }
-
+        
         _productService.Delete(id);
-
+        
         return Ok(new
         {
-            Message = $"Product '{product.Name}' deleted",
-            DeletedBy = User.Identity?.Name,
+            Message = $"Product '{product.Name}' deleted successfully",
             RemainingProducts = _productService.Count()
         });
     }

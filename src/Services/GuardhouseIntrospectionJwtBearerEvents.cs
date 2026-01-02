@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-internal class GuardhouseIntrospectionJwtBearerEvents(
+public class GuardhouseIntrospectionJwtBearerEvents(
     IOptions<GuardhouseResourceOptions> options,
     IGuardhouseIntrospectionService introspectionService,
     ILogger<GuardhouseIntrospectionJwtBearerEvents>? logger = null) : JwtBearerEvents

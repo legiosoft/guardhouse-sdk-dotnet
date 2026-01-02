@@ -1,101 +1,91 @@
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using FluentAssertions;
-using Guardhouse.SDK.Models;
-using Guardhouse.SDK.Services;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NodaTime;
+using NodaTime.Testing;
+using Guardhouse.SDK.Models;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Models;
 
-/// <summary>
-/// Unit tests for SDK models
-/// </summary>
 public class TokenResponseTests
 {
+    private readonly FakeClock _clock = new FakeClock(SystemClock.Instance.GetCurrentInstant());
+
     [Fact]
-    public void ExpiresAt_ShouldReturnCorrectInstant()
+    public void TokenResponse_DefaultValues_ShouldBeCorrect()
     {
-        var token = new TokenResponse
+        var response = new TokenResponse
         {
             AccessToken = "test_token",
             TokenType = "Bearer",
+            ExpiresIn = 3600
+        };
+
+        response.AccessToken.Should().Be("test_token");
+        response.TokenType.Should().Be("Bearer");
+        response.ExpiresIn.Should().Be(3600);
+    }
+
+    [Fact]
+    public void TokenResponse_ExpiresAt_ShouldCalculateCorrectly()
+    {
+        var response = new TokenResponse
+        {
             ExpiresIn = 3600
         };
 
         var now = SystemClock.Instance.GetCurrentInstant();
-        var expected = now.Plus(Duration.FromSeconds(3600));
+        var expectedExpiresAt = now.Plus(Duration.FromSeconds(3600));
 
-        var difference = (token.ExpiresAt - expected);
-        if (difference < Duration.Zero)
-        {
-            difference = -difference;
-        }
-        difference.Should().BeLessThan(Duration.FromSeconds(1));
+        response.ExpiresAt.Should().BeCloseTo(expectedExpiresAt, Duration.FromSeconds(1));
     }
 
     [Fact]
-    public void ExpiresAtDateTime_ShouldReturnCorrectDateTime()
+    public void TokenResponse_IsExpired_WithValidToken_ShouldReturnFalse()
     {
-        var token = new TokenResponse
-        {
-            AccessToken = "test_token",
-            TokenType = "Bearer",
-            ExpiresIn = 3600
-        };
-
-        var expiresAt = token.ExpiresAtDateTime;
-
-        expiresAt.Should().BeCloseTo(DateTime.UtcNow.AddHours(1), TimeSpan.FromSeconds(1));
-    }
-
-    [Fact]
-    public void IsExpired_WithNonExpiredToken_ShouldReturnFalse()
-    {
-        var token = new TokenResponse
+        var response = new TokenResponse
         {
             AccessToken = "test_token",
             ExpiresIn = 3600
         };
 
-        token.IsExpired().Should().BeFalse();
-        token.IsExpired(0).Should().BeFalse();
-        token.IsExpired(60).Should().BeFalse();
+        var isExpired = response.IsExpired(bufferSeconds: 300);
+
+        isExpired.Should().BeFalse();
     }
 
     [Fact]
-    public void IsExpired_WithExpiredToken_ShouldReturnTrue()
+    public void TokenResponse_IsExpired_WithExpiredToken_ShouldReturnTrue()
     {
-        var token = new TokenResponse
+        var pastInstant = SystemClock.Instance.GetCurrentInstant().Minus(Duration.FromMinutes(10));
+
+        var fakeClock = new FakeClock(pastInstant);
+        SystemClock.Instance.GetCurrentInstant = () => fakeClock.GetCurrentInstant();
+
+        var response = new TokenResponse
         {
             AccessToken = "test_token",
-            ExpiresIn = -1
+            ExpiresIn = -600
         };
 
-        token.IsExpired().Should().BeTrue();
-        token.IsExpired(0).Should().BeTrue();
-        token.IsExpired(120).Should().BeTrue();
+        var isExpired = response.IsExpired(bufferSeconds: 0);
+
+        isExpired.Should().BeTrue();
+
+        SystemClock.Instance.GetCurrentInstant = () => SystemClock.Instance.GetCurrentInstant();
     }
 
     [Fact]
-    public void IsExpired_WithBuffer_ShouldReturnTrue()
+    public void TokenResponse_IsExpired_WithBuffer_ShouldConsiderBuffer()
     {
-        var token = new TokenResponse
+        var response = new TokenResponse
         {
-            AccessToken = "test_token",
-            ExpiresIn = 59
+            ExpiresIn = 300
         };
 
-        // With default buffer of 60, token with 59 seconds remaining is considered expired
-        token.IsExpired().Should().BeTrue();
+        var isExpiredWithoutBuffer = response.IsExpired(bufferSeconds: 0);
+        var isExpiredWithBuffer = response.IsExpired(bufferSeconds: 120);
 
-        token.ExpiresIn = 120;
-        token.IsExpired().Should().BeFalse();
-        token.IsExpired(0).Should().BeFalse();
-        token.IsExpired(30).Should().BeFalse();
+        isExpiredWithoutBuffer.Should().BeFalse();
+        isExpiredWithBuffer.Should().BeTrue();
     }
 }

@@ -1,20 +1,13 @@
-using System;
 using FluentAssertions;
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
-using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Extensions;
 
-/// <summary>
-/// Unit tests for DI extensions
-/// </summary>
 public class ServiceCollectionExtensionsTests
 {
     [Fact]
@@ -65,12 +58,11 @@ public class ServiceCollectionExtensionsTests
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IAuthenticationService));
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseResourceService));
-        services.Should().Contain(sd => sd.ServiceType == typeof(GuardhouseJwtBearerEvents));
-        services.Should().Contain(sd => sd.ServiceType == typeof(IConfigureOptions<JwtBearerOptions>));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseIntrospectionService));
     }
 
     [Fact]
-    public void AddGuardhouseResource_WithIntrospection_ShouldConfigureCorrectly()
+    public void AddGuardhouseResource_WithIntrospectionMode_ShouldConfigureCorrectly()
     {
         var services = new ServiceCollection();
         services.AddGuardhouseResource(options =>
@@ -91,6 +83,87 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddGuardhouseResource_WithIntrospectionMode_MissingClientId_ShouldThrowValidationException()
+    {
+        var services = new ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = string.Empty;
+            options.IntrospectionClientSecret = "test-secret";
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*IntrospectionClientId is required*");
+    }
+
+    [Fact]
+    public void AddGuardhouseResource_WithIntrospectionMode_MissingClientSecret_ShouldThrowValidationException()
+    {
+        var services = new ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = "test-client";
+            options.IntrospectionClientSecret = string.Empty;
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*IntrospectionClientSecret is required*");
+    }
+
+    [Fact]
+    public void AddGuardhouseResource_WithJwtSignatureMode_ShouldNotRequireIntrospectionCredentials()
+    {
+        var services = new ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+            options.ValidationMode = TokenValidationMode.JwtSignature;
+        });
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void AddGuardhouseResource_MissingAuthority_ShouldThrowValidationException()
+    {
+        var services = new ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = string.Empty;
+            options.Audience = "test-audience";
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*Authority is required*");
+    }
+
+    [Fact]
+    public void AddGuardhouseResource_MissingAudience_ShouldThrowValidationException()
+    {
+        var services = new ServiceCollection();
+        
+        Action act = () => services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = string.Empty;
+        });
+
+        act.Should().Throw<Microsoft.Extensions.Options.OptionsValidationException>()
+            .WithMessage("*Audience is required*");
+    }
+
+    [Fact]
     public void AddGuardhouse_WithBothConfigurations_ShouldRegisterAllServices()
     {
         var services = new ServiceCollection();
@@ -103,27 +176,9 @@ public class ServiceCollectionExtensionsTests
             configureResourceAction: ro => {
                 ro.Authority = "https://test.com";
                 ro.Audience = "test-audience";
-                ro.EnableIntrospection = true;
             });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseResourceService));
-    }
-
-    [Fact]
-    public void ConfigureGuardhouseResilience_ShouldRegisterOptions()
-    {
-        var services = new ServiceCollection();
-        services.ConfigureGuardhouseResilience(options =>
-        {
-            options.MaxRetryAttempts = 5;
-            options.RequestTimeoutSeconds = 60;
-        });
-
-        var serviceProvider = services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseResilienceOptions>>().Value;
-
-        options.MaxRetryAttempts.Should().Be(5);
-        options.RequestTimeoutSeconds.Should().Be(60);
     }
 }

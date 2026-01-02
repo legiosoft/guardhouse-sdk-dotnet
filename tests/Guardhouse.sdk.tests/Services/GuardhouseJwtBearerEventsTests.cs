@@ -1,156 +1,300 @@
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Services;
 
-/// <summary>
-/// Unit tests for GuardhouseJwtBearerEvents
-/// </summary>
 public class GuardhouseJwtBearerEventsTests
 {
     private readonly Mock<IOptions<GuardhouseResourceOptions>> _mockOptions;
-    private readonly Mock<IGuardhouseTokenService> _mockTokenService;
-    private readonly Mock<ILogger<GuardhouseJwtBearerEvents>> _mockLogger;
+    private readonly Mock<IGuardhouseIntrospectionService> _mockIntrospectionService;
+    private readonly GuardhouseIntrospectionJwtBearerEvents _events;
 
     public GuardhouseJwtBearerEventsTests()
     {
         _mockOptions = new Mock<IOptions<GuardhouseResourceOptions>>();
-        _mockTokenService = new Mock<IGuardhouseTokenService>();
-        _mockLogger = new Mock<ILogger<GuardhouseJwtBearerEvents>>();
+        _mockIntrospectionService = new Mock<IGuardhouseIntrospectionService>();
+        _events = new GuardhouseIntrospectionJwtBearerEvents(
+            _mockOptions.Object,
+            _mockIntrospectionService.Object);
     }
 
-    [Fact]
-    public void Constructor_WithNullLogger_ShouldUseNullLogger()
-    {
-        var options = Options.Create(new GuardhouseResourceOptions());
-        var events = new GuardhouseJwtBearerEvents(options);
-
-        events.Should().NotBeNull();
-    }
+    #region JWT Signature Mode Tests
 
     [Fact]
-    public void Constructor_WithTokenService_ShouldUseProvidedService()
+    public async Task TokenValidated_WithJwtSignatureMode_ValidToken_ShouldSucceed()
     {
-        var options = Options.Create(new GuardhouseResourceOptions { EnableIntrospection = true });
-        var tokenServiceMock = new Mock<IGuardhouseTokenService>();
-
-        var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object);
-
-        events.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task TokenValidated_WithoutIntrospection_ShouldSucceed()
-    {
-        var options = Options.Create(new GuardhouseResourceOptions { EnableIntrospection = false });
-        var context = CreateTokenValidatedContext(options.Value);
-
-        var events = new GuardhouseJwtBearerEvents(options, tokenService: null, _mockLogger.Object);
-
-        await events.Invoking(e => e.TokenValidated(context)).Should().NotThrowAsync();
-    }
-
-    [Fact]
-    public async Task TokenValidated_WithIntrospection_AndActiveToken_ShouldAddClaims()
-    {
-        var options = Options.Create(new GuardhouseResourceOptions
+        var options = new GuardhouseResourceOptions
         {
-            EnableIntrospection = true,
-            IntrospectionClientId = "test-client",
-            IntrospectionClientSecret = "test-secret"
-        });
-
-        var introspectionResponse = new IntrospectionResponse
-        {
-            Active = true,
-            ClientId = "test-client",
-            Username = "testuser",
-            Scope = "api read write",
-            Sub = "user123",
-            Aud = "test-audience"
+            ValidationMode = TokenValidationMode.JwtSignature,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
         };
 
-        var tokenServiceMock = new Mock<IGuardhouseTokenService>();
-        tokenServiceMock
-            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(introspectionResponse);
+        _mockOptions.Setup(x => x.Value).Returns(options);
 
-        var context = CreateTokenValidatedContext(options.Value, "Bearer test_token");
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
 
-        var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object, _mockLogger.Object);
-        await events.TokenValidated(context);
+        await _events.TokenValidated(context);
 
-        var principal = context.Principal;
-        principal.Should().NotBeNull();
-
-        var claims = principal!.Claims;
-        claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == "user123");
-        claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == "testuser");
-        claims.Should().Contain(c => c.Type == "scope" && c.Value == "api");
-        claims.Should().Contain(c => c.Type == "scope" && c.Value == "read");
-        claims.Should().Contain(c => c.Type == "scope" && c.Value == "write");
-        claims.Should().Contain(c => c.Type == "audience" && c.Value == "test-audience");
+        context.FailCalled.Should().BeFalse();
     }
 
     [Fact]
-    public async Task TokenValidated_WithIntrospection_AndInactiveToken_ShouldFail()
+    public async Task TokenValidated_WithJwtSignatureMode_InvalidAlgorithm_ShouldFail()
     {
-        var options = Options.Create(new GuardhouseResourceOptions
+        var options = new GuardhouseResourceOptions
         {
-            EnableIntrospection = true,
-            IntrospectionClientId = "test-client",
-            IntrospectionClientSecret = "test-secret"
-        });
+            ValidationMode = TokenValidationMode.JwtSignature,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
 
-        var introspectionResponse = new IntrospectionResponse { Active = false };
+        _mockOptions.Setup(x => x.Value).Returns(options);
 
-        var tokenServiceMock = new Mock<IGuardhouseTokenService>();
-        tokenServiceMock
-            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(introspectionResponse);
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken(alg: "HS256"));
+        var jwtToken = CreateJwtToken(alg: "HS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
 
-        var context = CreateTokenValidatedContext(options.Value, "Bearer test_token");
+        await _events.TokenValidated(context);
 
-        var events = new GuardhouseJwtBearerEvents(options, tokenServiceMock.Object, _mockLogger.Object);
-        await events.TokenValidated(context);
-
-        context.Result.Should().NotBeNull();
-        context.Result.Succeeded.Should().BeFalse();
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Algorithm 'HS256' is not allowed");
     }
 
-    private static TokenValidatedContext CreateTokenValidatedContext(GuardhouseResourceOptions options, string? token = null)
+    [Fact]
+    public async Task TokenValidated_WithJwtSignatureMode_InvalidTokenType_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.JwtSignature,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken(alg: "RS256", typ: "Bearer"));
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "Bearer");
+        context.SecurityToken = jwtToken;
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Token type 'Bearer' is not allowed");
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithJwtSignatureMode_NoneAlgorithm_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.JwtSignature,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken(alg: "none", typ: "JWT"));
+        var jwtToken = CreateJwtToken(alg: "none", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Algorithm 'none' is not allowed");
+    }
+
+    #endregion
+
+    #region Introspection Mode Tests
+
+    [Fact]
+    public async Task TokenValidated_WithIntrospectionMode_ActiveToken_ShouldSucceed()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.Introspection,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Algorithm = "RS256",
+                Signature = "valid_signature"
+            });
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithIntrospectionMode_InactiveToken_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.Introspection,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = false
+            });
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Token is not active");
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithIntrospectionMode_InvalidAlgorithm_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.Introspection,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Algorithm = "HS256"
+            });
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Algorithm 'HS256' is not allowed");
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithIntrospectionMode_InvalidTokenType_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.Introspection,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                TokenType = "Bearer"
+            });
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Token type 'Bearer' is not allowed");
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithIntrospectionMode_MissingSignature_ShouldFail()
+    {
+        var options = new GuardhouseResourceOptions
+        {
+            ValidationMode = TokenValidationMode.Introspection,
+            ValidAlgorithms = new[] { "RS256" },
+            TokenTypes = new[] { "JWT" }
+        };
+
+        _mockOptions.Setup(x => x.Value).Returns(options);
+
+        var context = CreateTokenValidatedContext(token: CreateValidJwtToken());
+        var jwtToken = CreateJwtToken(alg: "RS256", typ: "JWT");
+        context.SecurityToken = jwtToken;
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Signature = null
+            });
+
+        await _events.TokenValidated(context);
+
+        context.FailCalled.Should().BeTrue();
+        context.FailureMessage.Should().Be("Token signature is missing");
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private static TokenValidatedContext CreateTokenValidatedContext(string token)
     {
         var httpContext = new DefaultHttpContext();
-        if (token != null)
-        {
-            httpContext.Request.Headers.Authorization = token;
-        }
+        httpContext.Request.Headers.Authorization = $"Bearer {token}";
 
-        var jwtOptions = new JwtBearerOptions();
-        var scheme = new AuthenticationScheme("Bearer", "Bearer", typeof(JwtBearerHandler));
-
-        var claims = new[] { new Claim(ClaimTypes.Name, "testuser") };
-        var identity = new ClaimsIdentity(claims, scheme.Name);
-        var principal = new ClaimsPrincipal(identity);
-
-        var context = new TokenValidatedContext(httpContext, scheme, jwtOptions)
-        {
-            Principal = principal
-        };
-
-        return context;
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(), JwtBearerDefaults.AuthenticationScheme);
+        return new TokenValidatedContext(httpContext, ticket);
     }
+
+    private static JwtSecurityToken CreateValidJwtToken(string alg = "RS256", string typ = "JWT")
+    {
+        var header = new JwtHeader(alg, typ);
+        var payload = new JwtPayload(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds());
+        return new JwtSecurityToken(header, payload);
+    }
+
+    private static JwtSecurityToken CreateJwtToken(string alg, string typ)
+    {
+        var header = new JwtHeader(alg, typ);
+        var payload = new JwtPayload(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds());
+        return new JwtSecurityToken(header, payload);
+    }
+
+    #endregion
 }
