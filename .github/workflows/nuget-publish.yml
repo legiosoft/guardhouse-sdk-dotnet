@@ -18,21 +18,26 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: src
+        working-directory: .
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-        
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+
       - name: Restore
         run: dotnet restore
-      
+
       - name: Determine version
         id: version
         run: |
@@ -47,21 +52,21 @@ jobs:
             VERSION=$(echo "$VERSION" | sed 's|refs/tags/v||' | sed 's|^v||')
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Build
-        run: dotnet build --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
-      
+        run: dotnet build --no-restore -c Release
+
       - name: Pack
-        run: dotnet pack -c Release -p:Version=${{ steps.version.outputs.version }} -o nuget/
-      
+        run: dotnet pack -c Release -o nuget/
+
       - name: Run Tests
-        run: dotnet test --no-build
-      
+        run: dotnet test --no-build --no-restore -c Release
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: nuget
-          path: src/nuget/
+          path: nuget/
 
   release:
     runs-on: ubuntu-latest
@@ -72,6 +77,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nuget
-      
+
       - name: Push to NuGet
         run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -8,8 +8,8 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.0-beta2</Version>
-        <PackageVersion>1.0.0-beta2</PackageVersion>
+        <Version>1.0.0-beta13</Version>
+        <PackageVersion>1.0.0-beta13</PackageVersion>
         <PackageAuthors>LEGIOSOFT SOLUTIONS S.L.</PackageAuthors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK</Product>
