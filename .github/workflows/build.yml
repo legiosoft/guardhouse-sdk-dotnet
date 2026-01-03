@@ -41,7 +41,7 @@ jobs:
 
       - name: Run Tests
         # This runs tests against ALL targeted frameworks defined in your test project
-        run: dotnet test --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+        run: dotnet test tests/Guardhouse.SDK.Tests/Guardhouse.sdk.tests.csproj --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
 
       - name: Upload Test Results
         if: always()
