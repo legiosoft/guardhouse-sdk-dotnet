@@ -1,14 +1,10 @@
-using ExampleClient.Models;
-using ExampleClient.Services;
 using Guardhouse.SDK.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen();
-builder.Services.AddSwaggerUI();
 
 builder.Services.AddGuardhouseClient(options =>
 {
@@ -21,8 +17,6 @@ builder.Services.AddGuardhouseClient(options =>
     options.EnableHttpResilience = true;
 });
 
-builder.Services.AddScoped<IProductService, ProductService>();
-
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -30,12 +24,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Guardhouse Example API v1");
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Guardhouse Example Client v1");
     });
 }
 
 app.UseHttpsRedirection();
-
 app.MapControllers();
 
 app.Run();

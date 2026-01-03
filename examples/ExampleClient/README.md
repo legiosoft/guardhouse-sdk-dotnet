@@ -1,14 +1,13 @@
 # Example Client Application
 
-This example demonstrates how to use Guardhouse SDK as a **Client** application that requests access tokens and calls protected APIs.
+This example demonstrates how to use Guardhouse SDK as a **Client** application that requests access tokens and uses them to call protected APIs.
 
 ## What This Example Shows
 
-- **Client Configuration**: Setting up Guardhouse SDK with credentials
-- **Token Management**: Requesting and caching access tokens
-- **API Authentication**: Using tokens to call protected endpoints
-- **Product CRUD Operations**: Create, read, update, and delete products
-- **Authorization Policies**: Protecting endpoints with `[Authorize]` attribute
+- **Client Configuration**: Setting up Guardhouse SDK with client credentials
+- **Token Management**: Requesting, caching, and refreshing access tokens
+- **Token Introspection**: Checking token validity and metadata
+- **Mock API Calls**: Demonstrating how to use access tokens when calling external APIs
 
 ## Prerequisites
 
@@ -18,7 +17,7 @@ This example demonstrates how to use Guardhouse SDK as a **Client** application 
 
 ## Configuration
 
-1. Copy this project and update `appsettings.json`:
+1. Update `appsettings.json` with your Guardhouse credentials:
 
 ```json
 {
@@ -46,19 +45,21 @@ The API will be available at:
 
 ## API Endpoints
 
-### Public Endpoints (No Authentication Required)
+### Token Management
 
-- `GET /api/products` - Get all products
+- `GET /api/token/current` - Request a new access token
+- `GET /api/token/refresh` - Refresh an existing token
+- `POST /api/token/introspect` - Introspect a token to check its validity
+- `GET /api/token/check-active?token={token}` - Check if a token is active
 
-### Protected Endpoints (Authentication Required)
+### Products (Mock External API)
 
-- `GET /api/products/{id}` - Get a specific product
+These endpoints demonstrate how to use access tokens when calling APIs:
+
+- `GET /api/products` - Get all products (returns token in response)
+- `GET /api/products/{id}` - Get a specific product by ID
 - `POST /api/products` - Create a new product
 - `DELETE /api/products/{id}` - Delete a product
-
-### Token Information
-
-- `GET /api/tokeninfo/info` - Get information about the current authentication token
 
 ## Testing with Swagger
 
@@ -66,12 +67,6 @@ When running in Development mode, Swagger UI is available at:
 ```
 https://localhost:5001/swagger
 ```
-
-To test protected endpoints in Swagger:
-1. Click the **"Authorize"** button (🔒) at the top right
-2. Enter your Guardhouse client credentials
-3. Click **"Authorize"** to authenticate
-4. All protected endpoints will now include the access token
 
 ## How It Works
 
@@ -91,100 +86,150 @@ builder.Services.AddGuardhouseClient(options =>
 });
 ```
 
-### 2. Token Management
+### 2. Getting an Access Token
 
-The SDK automatically handles:
-- **Token Caching**: Stores tokens in memory to avoid unnecessary requests
-- **Token Refresh**: Automatically refreshes tokens when they're about to expire
-- **Retry Logic**: Retries failed requests with exponential backoff
-
-### 3. Protected API Calls
-
-In controllers, we inject `IGuardhouseTokenService` and use it to get access tokens:
+The SDK automatically handles token caching and refresh:
 
 ```csharp
 public class ProductsController : ControllerBase
 {
     private readonly IGuardhouseTokenService _tokenService;
 
-    public ProductsController(IProductService productService, IGuardhouseTokenService tokenService)
+    public ProductsController(IGuardhouseTokenService tokenService)
     {
         _tokenService = tokenService;
     }
 
-    [HttpPost]
-    [Authorize]
-    public async Task<ActionResult<Product>> Create([FromBody] CreateProductRequest request)
+    [HttpGet]
+    public async Task<ActionResult> GetAll()
     {
         // Get access token (cached or requested)
         var accessToken = await _tokenService.GetAccessTokenAsync();
         
-        // Create product
-        var newProduct = _productService.Create(request);
+        // Use token to call external API
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization = 
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
         
-        return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, newProduct);
+        var response = await client.GetAsync("https://external-api.com/products");
+        return Ok(await response.Content.ReadAsStringAsync());
     }
 }
 ```
 
-### 4. Authorization
+### 3. Token Features
 
-The `[Authorize]` attribute protects endpoints. Only requests with valid Guardhouse tokens can access protected endpoints.
+**Automatic Caching**:
+- Tokens are cached in memory
+- Caching includes an expiration buffer (default: 60 seconds)
+- Prevents unnecessary token requests
+
+**Automatic Refresh**:
+- Tokens are refreshed before expiration
+- Uses refresh tokens when available
+- Seamless to the application code
+
+**Token Introspection**:
+- Check if a token is active: `await _tokenService.IsTokenActiveAsync(token)`
+- Get full token metadata: `await _tokenService.IntrospectTokenAsync(token)`
+
+### 4. Calling Protected APIs
+
+When calling protected APIs, include the access token in the Authorization header:
+
+```csharp
+public async Task<string> CallProtectedApi()
+{
+    var accessToken = await _tokenService.GetAccessTokenAsync();
+    
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.Authorization = 
+        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    
+    var response = await client.GetAsync("https://protected-api.com/data");
+    return await response.Content.ReadAsStringAsync();
+}
+```
+
+## Example: Token Management Flow
+
+1. **Request Initial Token**:
+   ```bash
+   curl https://localhost:5001/api/token/current
+   ```
+
+2. **Use Token to Call API**:
+   ```bash
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        https://external-api.com/products
+   ```
+
+3. **Check Token Status**:
+   ```bash
+   curl -X POST https://localhost:5001/api/token/introspect \
+        -H "Content-Type: application/json" \
+        -d '{"token":"YOUR_TOKEN"}'
+   ```
 
 ## Security Features
 
 This example demonstrates the following security features:
 
-✅ **Automatic Token Management** - No manual token handling required
-✅ **Token Caching** - Reduces server load and improves performance
-✅ **Automatic Refresh** - Tokens are refreshed before expiration
+✅ **Client Credentials Flow** - Secure client authentication
+✅ **Automatic Token Caching** - Reduces server load and improves performance
+✅ **Automatic Token Refresh** - Tokens are refreshed before expiration
 ✅ **HTTP Resilience** - Built-in retry policies for transient failures
-✅ **Secure Token Storage** - Tokens are stored securely in memory
-✅ **Protected Endpoints** - Sensitive operations require valid authentication
+✅ **Token Introspection** - Verify token validity without decoding
+✅ **Secure Secret Storage** - Use environment variables or secret managers
 
-## Next Steps
+## Real-World Use Cases
 
-After running this example:
-
-1. **Create a Resource Server**: See the ExampleResource project to learn how to protect APIs
-2. **Configure Your Guardhouse Cloud**: Set up clients and APIs in Guardhouse Cloud
-3. **Customize Token Handling**: Extend the example to handle specific token requirements
-4. **Add Authorization Policies**: Implement role-based or scope-based access control
-
-## Common Scenarios
-
-### Calling External APIs
+### Backend Service Calling Multiple APIs
 
 ```csharp
-public async Task<string> CallExternalApi()
+public class ExternalApiService
 {
-    var accessToken = await _tokenService.GetAccessTokenAsync();
-    
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.Authorization = 
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-    
-    var response = await client.GetAsync("https://external-api.com/data");
-    return await response.Content.ReadAsStringAsync();
+    private readonly IGuardhouseTokenService _tokenService;
+
+    public async Task<CombinedData> FetchAllData()
+    {
+        var accessToken = await _tokenService.GetAccessTokenAsync();
+        
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization = 
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        
+        var tasks = new[]
+        {
+            client.GetAsync("https://api1.example.com/data"),
+            client.GetAsync("https://api2.example.com/data"),
+            client.GetAsync("https://api3.example.com/data")
+        };
+        
+        await Task.WhenAll(tasks);
+        // Process responses...
+    }
 }
 ```
 
-### Batch Operations with Token Reuse
+### Background Worker with Periodic Calls
 
 ```csharp
-public async Task ProcessMultipleRequests()
+public class DataSyncWorker : BackgroundService
 {
-    var accessToken = await _tokenService.GetAccessTokenAsync();
-    
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.Authorization = 
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-    
-    // All requests use the same token
-    var tasks = endpoints.Select(endpoint => 
-        client.GetAsync(endpoint));
-    
-    await Task.WhenAll(tasks);
+    private readonly IGuardhouseTokenService _tokenService;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            var accessToken = await _tokenService.GetAccessTokenAsync();
+            
+            await SyncDataWithToken(accessToken);
+            
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+        }
+    }
 }
 ```
 
@@ -195,17 +240,28 @@ public async Task ProcessMultipleRequests()
 - Verify your Client ID and Secret are correct
 - Check that the Authority URL is correct
 - Ensure your client is enabled in Guardhouse Cloud
+- Verify the scope matches what's configured in Guardhouse Cloud
 
 ### Token Expiration Issues
 
-- The SDK automatically refreshes tokens
-- Enable `EnableTokenRefresh = true` in configuration
+- The SDK automatically refreshes tokens when `EnableTokenRefresh = true`
 - Check your client's refresh token settings in Guardhouse Cloud
+- Increase `CacheExpirationBufferSeconds` if you experience frequent expiration
 
-### CORS Issues
+### Connection Errors
 
-- Ensure Guardhouse Cloud allows your application's origin
-- Add your development server URL to allowed origins
+- Verify Guardhouse server is accessible from your network
+- Check firewall rules allow outbound HTTPS
+- Verify SSL/TLS certificates are valid
+
+## Next Steps
+
+After running this example:
+
+1. **See ExampleResource**: Learn how to build protected API endpoints
+2. **Configure Your Guardhouse Cloud**: Set up clients and APIs
+3. **Implement Proper Secret Management**: Use environment variables or secret stores
+4. **Add Error Handling**: Implement proper error handling for production
 
 ## Support
 

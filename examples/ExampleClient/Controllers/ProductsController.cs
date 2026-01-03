@@ -1,8 +1,6 @@
 using ExampleClient.DTOs;
-using ExampleClient.Models;
 using ExampleClient.Services;
 using Guardhouse.SDK.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExampleClient.Controllers;
@@ -21,14 +19,21 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<IEnumerable<Product>> GetAll()
+    public async Task<ActionResult> GetAll()
     {
-        return Ok(_productService.GetAll());
+        var accessToken = await _tokenService.GetAccessTokenAsync();
+        var products = _productService.GetAll();
+        
+        return Ok(new
+        {
+            Products = products,
+            AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+            Message = "Products retrieved successfully"
+        });
     }
 
     [HttpGet("{id}")]
-    [Authorize]
-    public async Task<ActionResult<Product>> GetById(int id)
+    public async Task<ActionResult> GetById(int id)
     {
         var accessToken = await _tokenService.GetAccessTokenAsync();
         var product = _productService.GetById(id);
@@ -41,30 +46,29 @@ public class ProductsController : ControllerBase
         return Ok(new
         {
             Product = product,
-            AccessToken = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+            AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
             Message = "Product retrieved successfully"
         });
     }
 
     [HttpPost]
-    [Authorize]
-    public async Task<ActionResult<Product>> Create([FromBody] CreateProductRequest request)
+    public async Task<ActionResult> Create([FromBody] CreateProductRequest request)
     {
-        var newProduct = _productService.Create(request);
         var accessToken = await _tokenService.GetAccessTokenAsync();
+        var newProduct = _productService.Create(request);
         
         return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
         {
             Product = newProduct,
-            AccessToken = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+            AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
             Message = "Product created successfully"
         });
     }
 
     [HttpDelete("{id}")]
-    [Authorize]
-    public ActionResult Delete(int id)
+    public async Task<ActionResult> Delete(int id)
     {
+        var accessToken = await _tokenService.GetAccessTokenAsync();
         var product = _productService.GetById(id);
         if (product == null)
         {
@@ -76,6 +80,7 @@ public class ProductsController : ControllerBase
         return Ok(new
         {
             Message = $"Product '{product.Name}' deleted successfully",
+            AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
             RemainingProducts = _productService.Count()
         });
     }
