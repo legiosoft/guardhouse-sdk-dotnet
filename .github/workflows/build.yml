@@ -10,7 +10,7 @@ jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,14 +34,13 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore Dependencies
-        run: dotnet restore src/Guardhouse.SDK.csproj
+        run: dotnet restore guardhouse-sdk-dotnet.sln
 
-      - name: Build SDK (All Targets)
-        run: dotnet build src/Guardhouse.SDK.csproj --no-restore -c Release
+      - name: Build Solution
+        run: dotnet build guardhouse-sdk-dotnet.sln --no-restore -c Release
 
       - name: Run Tests
-        # This runs tests against ALL targeted frameworks defined in your test project
-        run: dotnet test tests/Guardhouse.SDK.Tests/Guardhouse.sdk.tests.csproj --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+        run: dotnet test guardhouse-sdk-dotnet.sln --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
 
       - name: Upload Test Results
         if: always()
