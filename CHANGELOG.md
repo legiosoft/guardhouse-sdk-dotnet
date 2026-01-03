@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Comprehensive XML documentation comments for all public APIs
+  - `GuardhouseClientOptions` with detailed property descriptions
+  - `GuardhouseResourceOptions` with configuration explanations
+  - `TokenValidationMode` enum with usage guidance
+  - `IntrospectionResponse` and `TokenResponse` models
+  - All service interfaces and implementations
+  - Extension methods for service registration
+  - Custom validation attributes
+
 ## [1.0.0-beta1] - 2026-01-02
 
 ### Added
