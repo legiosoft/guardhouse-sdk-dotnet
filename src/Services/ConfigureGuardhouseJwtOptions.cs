@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
+/// <summary>
+/// Configures JWT bearer authentication options for Guardhouse.
+/// Sets up either signature validation or introspection-based validation based on the configured mode.
+/// </summary>
 internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions> resourceOptions)
     : IConfigureNamedOptions<JwtBearerOptions>
 {

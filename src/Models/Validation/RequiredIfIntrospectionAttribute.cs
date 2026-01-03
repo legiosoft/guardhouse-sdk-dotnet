@@ -4,6 +4,9 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using Models;
 
+/// <summary>
+/// Specifies that a property is required when the ValidationMode is set to Introspection.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class RequiredIfIntrospectionAttribute : ValidationAttribute
 {

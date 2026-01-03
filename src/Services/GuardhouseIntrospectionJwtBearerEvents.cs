@@ -12,6 +12,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+/// <summary>
+/// JWT bearer events handler that performs token introspection validation.
+/// This replaces the default JWT signature validation with introspection-based validation.
+/// </summary>
 public class GuardhouseIntrospectionJwtBearerEvents(
     IOptions<GuardhouseResourceOptions> options,
     IGuardhouseIntrospectionService introspectionService,
@@ -21,6 +25,10 @@ public class GuardhouseIntrospectionJwtBearerEvents(
     private readonly IGuardhouseIntrospectionService _introspectionService = introspectionService;
     private readonly ILogger<GuardhouseIntrospectionJwtBearerEvents> _logger = logger ?? NullLogger<GuardhouseIntrospectionJwtBearerEvents>.Instance;
 
+    /// <summary>
+    /// Validates a token by introspecting it with the identity server.
+    /// Builds claims from the introspection response and sets them on the authentication context.
+    /// </summary>
     public override async Task TokenValidated(TokenValidatedContext context)
     {
         var token = context.SecurityToken is JwtSecurityToken jwtToken ? jwtToken.RawData : null;

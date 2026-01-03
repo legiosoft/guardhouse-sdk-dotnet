@@ -11,8 +11,18 @@ using Microsoft.Extensions.Options;
 using NodaTime;
 using Polly;
 
+/// <summary>
+/// Extension methods for configuring Guardhouse services in the dependency injection container.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds the Guardhouse client services to the dependency injection container.
+    /// This enables your application to obtain access tokens from the identity server.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configureAction">Optional action to configure Guardhouse client options.</param>
+    /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseClient(
         this IServiceCollection services,
         Action<GuardhouseClientOptions>? configureAction = null)
@@ -44,6 +54,13 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Adds the Guardhouse resource server services to the dependency injection container.
+    /// This enables your application to validate incoming JWT tokens.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configureAction">Optional action to configure Guardhouse resource options.</param>
+    /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseResource(
         this IServiceCollection services,
         Action<GuardhouseResourceOptions>? configureAction = null)
@@ -80,6 +97,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Adds both Guardhouse client and resource server services to the dependency injection container.
+    /// This is a convenience method that calls both AddGuardhouseClient and AddGuardhouseResource.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configureClientAction">Optional action to configure Guardhouse client options.</param>
+    /// <param name="configureResourceAction">Optional action to configure Guardhouse resource options.</param>
+    /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouse(
         this IServiceCollection services,
         Action<GuardhouseClientOptions>? configureClientAction = null,
@@ -90,6 +115,15 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Adds the Guardhouse client services with simple configuration using individual parameters.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="authority">The authority URL of the identity server.</param>
+    /// <param name="clientId">The client ID assigned to your application.</param>
+    /// <param name="clientSecret">The client secret for your application.</param>
+    /// <param name="scope">The scope(s) to request (default: "api").</param>
+    /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseClient(
         this IServiceCollection services,
         string authority,
@@ -106,6 +140,13 @@ public static class ServiceCollectionExtensions
         });
     }
 
+    /// <summary>
+    /// Adds the Guardhouse resource server services with simple configuration using individual parameters.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="authority">The authority URL of the identity server.</param>
+    /// <param name="audience">The audience that your resource server expects.</param>
+    /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseResource(
         this IServiceCollection services,
         string authority,

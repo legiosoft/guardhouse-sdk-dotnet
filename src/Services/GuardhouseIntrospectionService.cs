@@ -16,6 +16,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NodaTime;
 
+/// <summary>
+/// Service for introspecting tokens with the identity server using a micro-cache strategy.
+/// </summary>
 public class GuardhouseIntrospectionService(
     HttpClient httpClient,
     IMemoryCache memoryCache,
@@ -29,6 +32,13 @@ public class GuardhouseIntrospectionService(
 
     private const string IntrospectionCacheKeyPrefix = "guardhouse_introspection_";
 
+    /// <summary>
+    /// Introspects a token to determine if it is active and retrieve its claims.
+    /// Uses a micro-cache strategy to handle burst traffic while maintaining near-real-time revocation security.
+    /// </summary>
+    /// <param name="token">The access token to introspect.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>An introspection response containing the token's status and claims.</returns>
     public async Task<IntrospectionResponse> IntrospectTokenAsync(string token, CancellationToken cancellationToken = default)
     {
         var resourceOptions = _options.Value;
