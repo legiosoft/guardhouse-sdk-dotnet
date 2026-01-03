@@ -47,7 +47,7 @@ app.MapGet("/api/call-protected", async (IGuardhouseTokenService tokenService) =
     var accessToken = await tokenService.GetAccessTokenAsync();
 
     using var client = new HttpClient();
-    client.DefaultRequestHeaders.Authorization = 
+    client.DefaultRequestHeaders.Authorization =
         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
     var response = await client.GetAsync("https://protected-api.com/data");
@@ -63,7 +63,7 @@ app.MapGet("/api/call-protected", async (IGuardhouseTokenService tokenService) =
 app.Run();
 ```
 
-Minimal configuration (no action delegate):
+Minimal configuration:
 
 ```csharp
 builder.Services.AddGuardhouseClient(
@@ -88,7 +88,6 @@ builder.Services.AddGuardhouseResource(options =>
     options.Authority = "https://your-guardhouse-server.com";
     options.Audience = "my_resource_api";
     options.ValidationMode = TokenValidationMode.JwtSignature;
-    options.ValidAlgorithms = new[] { "RS256" };
 });
 
 var app = builder.Build();
@@ -129,12 +128,12 @@ builder.Services.AddGuardhouseClient(options =>
     options.ClientId = "your-client-id";                          // Required
     options.ClientSecret = "your-client-secret";                    // Required
     options.Scope = "api";                                        // Default: "api"
-    
+
     // Optional features
     options.EnableTokenCaching = true;                              // Default: true
     options.CacheExpirationBufferSeconds = 60;                         // Default: 60
     options.EnableTokenRefresh = true;                                // Default: true
-    
+
     // Resilience
     options.EnableHttpResilience = true;                             // Default: true
     options.RequestTimeoutSeconds = 30;                                // Default: 30
@@ -148,32 +147,34 @@ builder.Services.AddGuardhouseClient(options =>
 builder.Services.AddGuardhouseResource(options =>
 {
     options.Authority = "https://your-guardhouse-server.com";       // Required
-    options.Audience = "my_resource_api";                        // Default: "my_resource_api"
-    
+    options.Audience = "my_resource_api";                        // Required
+
     // Validation mode: JWT Signature or Introspection
     options.ValidationMode = TokenValidationMode.JwtSignature;    // Default: JWT Signature
-    
+
     // Required for Introspection mode
     options.IntrospectionClientId = "your-client-id";          // Required for introspection
     options.IntrospectionClientSecret = "your-client-secret";    // Required for introspection
-    
+
     // Token validation settings
     options.ValidateIssuer = true;                                 // Default: true
     options.ValidateAudience = true;                               // Default: true
     options.ValidateLifetime = true;                                // Default: true
     options.ValidateIssuerSigningKey = true;                        // Default: true
-    
+
     // JWT validation
     options.ValidAlgorithms = new[] { "RS256" };                 // Default: RS256
     options.TokenTypes = new[] { "JWT" };                          // Default: JWT
-    options.ClockSkew = TimeSpan.FromMinutes(5);               // Default: 5 minutes
-    
+
     // JWKS caching
     options.JwksCacheDurationHours = 24;                           // Default: 24 hours
     options.JwksRefreshIntervalMinutes = 5;                        // Default: 5 minutes
-    
+
+    // Introspection caching (micro-cache for burst traffic)
+    options.IntrospectionCacheTtlSeconds = 5;                     // Default: 5 seconds
+
     // HTTPS metadata
-    options.RequireHttpsMetadata = true;                            // Default: true for HTTPS
+    options.RequireHttpsMetadata = true;                            // Default: derived from authority
 });
 ```
 
@@ -247,7 +248,7 @@ public interface IGuardhouseResourceService
 
 ### Validation Modes
 
-**JWT Signature Mode**:
+**JWT Signature Mode** (Default):
 - Uses JWKS endpoint for token validation
 - Automatic key rotation support with lazy refresh
 - Validates signature, issuer, audience, lifetime, algorithm, token type
@@ -255,7 +256,7 @@ public interface IGuardhouseResourceService
 **Introspection Mode** (RFC 7662):
 - Validates tokens via Guardhouse introspection endpoint
 - Client credentials required for introspection calls
-- Caches introspection results until token expiration
+- Micro-cache (5 seconds) for burst traffic handling
 
 ### Protected Attack Vectors
 
@@ -275,13 +276,24 @@ public interface IGuardhouseResourceService
 The SDK implements "Lazy Refresh on Unknown Key" strategy:
 
 1. Extract `kid` (Key ID) from incoming JWT token header
-2. Check local cache for the key
+2. Check local cache for key
 3. If key exists: Validate signature (fast path)
 4. If key missing: Trigger JWKS refresh from `/.well-known/jwks.json`
 5. Rate limit refresh (configurable, default 5 minutes)
 6. Re-check cache and validate with new keys
 
 This ensures your API accepts valid tokens even after key rotation, while protecting against DoS attacks via rate limiting.
+
+### Introspection Micro-Cache Strategy
+
+The SDK implements a micro-cache for introspection results:
+
+- **Default TTL**: 5 seconds
+- **Purpose**: Handles burst traffic (e.g., page loads with multiple API calls)
+- **Security**: Maintains near-real-time revocation security by rapidly refreshing
+- **Trade-off**: Minimal delay (5 seconds) vs. significant performance improvement for burst scenarios
+
+Use introspection mode when you need real-time token revocation checking, but be aware of the network request overhead.
 
 ## Examples
 
@@ -291,20 +303,20 @@ This ensures your API accepts valid tokens even after key rotation, while protec
 public class ExternalApiService
 {
     private readonly IGuardhouseTokenService _tokenService;
-    
+
     public ExternalApiService(IGuardhouseTokenService tokenService)
     {
         _tokenService = tokenService;
     }
-    
+
     public async Task<string> CallProtectedEndpoint()
     {
         var accessToken = await _tokenService.GetAccessTokenAsync();
-        
+
         using var client = new HttpClient();
-        client.DefaultRequestHeaders.Authorization = 
+        client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-        
+
         var response = await client.GetAsync("https://protected-api.com/data");
         return await response.Content.ReadAsStringAsync();
     }
@@ -326,14 +338,14 @@ public class ProductsController : ControllerBase
     {
         return Ok(new[] { "Product 1", "Product 2" });
     }
-    
+
     [HttpPost]
     [Authorize]
     public IActionResult Create([FromBody] CreateProductRequest request)
     {
         return CreatedAtAction(nameof(GetById), new { id = 1 }, request);
     }
-    
+
     [HttpDelete("{id}")]
     [Authorize]
     public IActionResult Delete(int id)
@@ -351,11 +363,11 @@ builder.Services.AddAuthorization(options =>
     // Require specific scope
     options.AddPolicy("ReadAccess", policy =>
         policy.RequireClaim("scope", "read"));
-    
+
     // Require admin role
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole("admin"));
-    
+
     // Require multiple conditions
     options.AddPolicy("CanManage", policy =>
         policy.RequireClaim("scope", "manage")
@@ -407,7 +419,7 @@ builder.Services.AddGuardhouseResource(options =>
 
 1. Verify your Guardhouse credentials are correct
 2. Check that Authority URL matches your Guardhouse instance
-3. Ensure the client is enabled in Guardhouse Cloud
+3. Ensure client is enabled in Guardhouse Cloud
 4. Verify token hasn't expired
 
 ### JWKS Refresh Issues
@@ -427,7 +439,7 @@ builder.Services.AddGuardhouseResource(options =>
 
 ## License
 
-Licensed under the Apache License 2.0
+Licensed under Apache License 2.0
 
 ## Support
 
