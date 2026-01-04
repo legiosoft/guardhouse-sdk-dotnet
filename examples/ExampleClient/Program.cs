@@ -1,4 +1,5 @@
 using Guardhouse.SDK.Extensions;
+using Guardhouse.SDK.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,7 @@ builder.Services.AddGuardhouseClient(options =>
     options.Scope = builder.Configuration["Guardhouse:Scope"]!;
     options.IntrospectionClientId = builder.Configuration["Guardhouse:ClientId"]!;
     options.IntrospectionClientSecret = builder.Configuration["Guardhouse:ClientSecret"]!;
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
     options.EnableTokenCaching = true;
     options.EnableTokenRefresh = true;
     options.EnableHttpResilience = true;

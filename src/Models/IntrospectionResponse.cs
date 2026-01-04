@@ -93,16 +93,16 @@ public class IntrospectionResponse
     public string? Jti { get; set; }
 
     /// <summary>
-    /// The role assigned to the token subject.
-    /// </summary>
-    [JsonPropertyName("role")]
-    public string? Role { get; set; }
-
-    /// <summary>
     /// Multiple roles assigned to the token subject, space-separated.
     /// </summary>
     [JsonPropertyName("roles")]
     public string? Roles { get; set; }
+
+    /// <summary>
+    /// Multiple roles assigned to the token subject as an array.
+    /// </summary>
+    [JsonPropertyName("role")]
+    public string[]? Role { get; set; }
 
     /// <summary>
     /// Gets the expiration time as an Instant, or null if not available.

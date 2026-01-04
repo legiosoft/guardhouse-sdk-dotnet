@@ -75,6 +75,12 @@ public class GuardhouseResourceOptions
     public int IntrospectionCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionCacheTtlSeconds;
 
     /// <summary>
+    /// How to send client credentials to the introspection endpoint (default: BasicAuth).
+    /// Use FormData if your identity server does not accept Basic Authentication.
+    /// </summary>
+    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } = IntrospectionCredentialTransmission.BasicAuth;
+
+    /// <summary>
     /// The list of valid signing algorithms for tokens (default: ["RS256"]).
     /// </summary>
     public string[] ValidAlgorithms { get; set; } = [GuardhouseConstants.Algorithms.RS256];

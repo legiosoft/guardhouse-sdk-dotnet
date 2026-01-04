@@ -62,15 +62,27 @@ public class GuardhouseIntrospectionService(
         var introspectionEndpoint = $"{resourceOptions.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Basic",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                $"{resourceOptions.IntrospectionClientId}:{resourceOptions.IntrospectionClientSecret}")));
 
-        request.Content = new FormUrlEncodedContent([
-            new KeyValuePair<string, string>("token", token),
-            new KeyValuePair<string, string>("token_type_hint", "access_token")
-        ]);
+        var formData = new List<KeyValuePair<string, string>>
+        {
+            new("token", token),
+            new("token_type_hint", "access_token")
+        };
+
+        if (resourceOptions.IntrospectionCredentialTransmission == IntrospectionCredentialTransmission.BasicAuth)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                    $"{resourceOptions.IntrospectionClientId}:{resourceOptions.IntrospectionClientSecret}")));
+        }
+        else
+        {
+            formData.Add(new KeyValuePair<string, string>("client_id", resourceOptions.IntrospectionClientId));
+            formData.Add(new KeyValuePair<string, string>("client_secret", resourceOptions.IntrospectionClientSecret));
+        }
+
+        request.Content = new FormUrlEncodedContent(formData);
 
         _logger.LogDebug("Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
 

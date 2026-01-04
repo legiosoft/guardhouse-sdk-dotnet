@@ -199,7 +199,7 @@ public class GuardhouseJwtBearerEventsTests
             {
                 Active = true,
                 Sub = "user",
-                Role = "Admin"
+                Role = new[] { "Admin" }
             });
 
         await _events.TokenValidated(context);
@@ -241,7 +241,7 @@ public class GuardhouseJwtBearerEventsTests
             {
                 Active = true,
                 Sub = "user",
-                Role = "Admin",
+                Role = new[] { "Admin" },
                 Roles = "Admin Editor Admin Viewer"
             });
 

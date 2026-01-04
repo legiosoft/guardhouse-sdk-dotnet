@@ -75,4 +75,10 @@ public class GuardhouseClientOptions
     /// If not set, the introspection will use ClientId and ClientSecret.
     /// </summary>
     public string? IntrospectionClientSecret { get; set; }
+
+    /// <summary>
+    /// How to send client credentials to the introspection endpoint (default: BasicAuth).
+    /// Use FormData if your identity server does not accept Basic Authentication.
+    /// </summary>
+    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } = IntrospectionCredentialTransmission.BasicAuth;
 }

@@ -424,6 +424,74 @@ public class GuardhouseTokenServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.IntrospectTokenAsync("test_token"));
     }
 
+    [Fact]
+    public async Task IntrospectTokenAsync_ShouldSendFormDataCredentials_WhenConfigured()
+    {
+        HttpRequestMessage? sentRequest = null;
+        string? formData = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                sentRequest = req;
+                formData = await req.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new IntrospectionResponse { Active = true }))
+            });
+
+        var options = new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "test-client",
+            ClientSecret = "test-secret",
+            Scope = "api",
+            IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData
+        };
+        var optionsWrapper = Options.Create(options);
+
+        var tokenService = new GuardhouseTokenService(
+            _httpClient,
+            _memoryCache,
+            optionsWrapper,
+            _mockLogger.Object,
+            _testClock);
+
+        await tokenService.IntrospectTokenAsync("test_token");
+
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Headers.Authorization.Should().BeNull();
+
+        formData.Should().NotBeNull();
+        formData.Should().Contain("client_id=test-client");
+        formData.Should().Contain("client_secret=test-secret");
+        formData.Should().Contain("token=test_token");
+    }
+
+    [Fact]
+    public async Task IntrospectTokenAsync_WithRolesArray_ShouldParseCorrectly()
+    {
+        SetupMockIntrospectionResponse(new IntrospectionResponse
+        {
+            Active = true,
+            Role = new[] { "admin", "user", "editor" }
+        });
+
+        var tokenService = CreateTokenService();
+        var result = await tokenService.IntrospectTokenAsync("test_token");
+
+        result.Active.Should().BeTrue();
+        result.Role.Should().NotBeNull();
+        result.Role.Should().HaveCount(3);
+        result.Role.Should().Contain("admin");
+        result.Role.Should().Contain("user");
+        result.Role.Should().Contain("editor");
+    }
+
     #endregion
 
     #region Is Token Active Tests

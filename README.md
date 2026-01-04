@@ -104,7 +104,7 @@ app.MapGet("/api/protected", [Authorize] () =>
 app.Run();
 ```
 
-With Token Introspection (RFC 7662):
+ With Token Introspection (RFC 7662):
 
 ```csharp
 builder.Services.AddGuardhouseResource(options =>
@@ -114,6 +114,20 @@ builder.Services.AddGuardhouseResource(options =>
     options.ValidationMode = TokenValidationMode.Introspection;
     options.IntrospectionClientId = "your-introspection-client-id";
     options.IntrospectionClientSecret = "your-introspection-client-secret";
+});
+```
+
+If your identity server does not accept Basic Authentication for introspection, use FormData credential transmission:
+
+```csharp
+builder.Services.AddGuardhouseResource(options =>
+{
+    options.Authority = "https://your-guardhouse-server.com";
+    options.Audience = "my_resource_api";
+    options.ValidationMode = TokenValidationMode.Introspection;
+    options.IntrospectionClientId = "your-introspection-client-id";
+    options.IntrospectionClientSecret = "your-introspection-client-secret";
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
 });
 ```
 
@@ -134,10 +148,15 @@ builder.Services.AddGuardhouseClient(options =>
     options.CacheExpirationBufferSeconds = 60;                         // Default: 60
     options.EnableTokenRefresh = true;                                // Default: true
 
-    // Resilience
+     // Resilience
     options.EnableHttpResilience = true;                             // Default: true
     options.RequestTimeoutSeconds = 30;                                // Default: 30
     options.MaxRetryAttempts = 3;                                     // Default: 3
+
+    // Introspection (optional - for debugging purposes)
+    options.IntrospectionClientId = "your-introspection-client-id"; // Optional
+    options.IntrospectionClientSecret = "your-introspection-client-secret"; // Optional
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
 });
 ```
 
@@ -152,9 +171,10 @@ builder.Services.AddGuardhouseResource(options =>
     // Validation mode: JWT Signature or Introspection
     options.ValidationMode = TokenValidationMode.JwtSignature;    // Default: JWT Signature
 
-    // Required for Introspection mode
+     // Required for Introspection mode
     options.IntrospectionClientId = "your-client-id";          // Required for introspection
     options.IntrospectionClientSecret = "your-client-secret";    // Required for introspection
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
 
     // Token validation settings
     options.ValidateIssuer = true;                                 // Default: true
@@ -415,12 +435,26 @@ builder.Services.AddGuardhouseResource(options =>
 
 ### Token Validation Issues
 
-**Error: "401 Unauthorized"**
+ **Error: "401 Unauthorized"**
 
 1. Verify your Guardhouse credentials are correct
 2. Check that Authority URL matches your Guardhouse instance
 3. Ensure client is enabled in Guardhouse Cloud
 4. Verify token hasn't expired
+
+**Error: "invalid_client" when using introspection**
+
+If your identity server rejects Basic Authentication headers, use FormData credential transmission:
+
+```csharp
+builder.Services.AddGuardhouseResource(options =>
+{
+    options.ValidationMode = TokenValidationMode.Introspection;
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
+});
+```
+
+This sends `client_id` and `client_secret` as form parameters instead of HTTP Basic Authentication.
 
 ### JWKS Refresh Issues
 

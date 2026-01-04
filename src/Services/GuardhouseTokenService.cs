@@ -276,14 +276,27 @@ public class GuardhouseTokenService(
                 async (ct) =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-                    request.Content = new FormUrlEncodedContent([
-                        new KeyValuePair<string, string>("token", token)
-                    ]);
 
                     var clientId = options1.IntrospectionClientId ?? options1.ClientId;
                     var clientSecret = options1.IntrospectionClientSecret ?? options1.ClientSecret;
-                    var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+
+                    var formData = new List<KeyValuePair<string, string>>
+                    {
+                        new("token", token)
+                    };
+
+                    if (options1.IntrospectionCredentialTransmission == IntrospectionCredentialTransmission.BasicAuth)
+                    {
+                        var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+                        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+                    }
+                    else
+                    {
+                        formData.Add(new KeyValuePair<string, string>("client_id", clientId));
+                        formData.Add(new KeyValuePair<string, string>("client_secret", clientSecret));
+                    }
+
+                    request.Content = new FormUrlEncodedContent(formData);
                     return await httpClient.SendAsync(request, ct);
                 },
                 combinedCts.Token);

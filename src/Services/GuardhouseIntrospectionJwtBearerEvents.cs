@@ -96,9 +96,12 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             claims.Add(new Claim(ClaimTypes.Name, introspectionResult.Username));
         }
 
-        if (!string.IsNullOrEmpty(introspectionResult.Role))
+        if (introspectionResult.Role != null && introspectionResult.Role.Length > 0)
         {
-            roles.Add(introspectionResult.Role);
+            foreach (var role in introspectionResult.Role)
+            {
+                roles.Add(role);
+            }
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Roles))
