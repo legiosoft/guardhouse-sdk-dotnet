@@ -18,7 +18,7 @@ public static class StringExtensions
             return string.Empty;
         }
 
-        return value.Length <= length ? value : value.Substring(0, length);
+        return value.Length <= length ? value : value[..length];
     }
 
     /// <summary>
@@ -40,6 +40,6 @@ public static class StringExtensions
             return value;
         }
 
-        return value.Substring(0, maxLength) + ellipsis;
+        return value[..maxLength] + ellipsis;
     }
 }

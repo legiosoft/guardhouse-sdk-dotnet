@@ -139,12 +139,7 @@ public class GuardhouseIntrospectionService(
             var cacheTtl = TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds);
             if (cacheTtl > TimeSpan.Zero)
             {
-                var cacheOptions = new MemoryCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = cacheTtl,
-                    Size = 1
-                };
-                _memoryCache.Set(cacheKey, introspectionResponse, cacheOptions);
+                _memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
                 _logger.LogDebug("Cached introspection result for {CacheTtl}", cacheTtl);
             }
         }

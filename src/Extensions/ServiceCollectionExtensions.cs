@@ -1,6 +1,5 @@
 namespace Guardhouse.SDK.Extensions;
 
-using System;
 using System.Net.Http;
 using Constants;
 using Models;
@@ -27,16 +26,13 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<GuardhouseClientOptions>? configureAction = null)
     {
-        if (configureAction != null)
+        if (configureAction is not null)
         {
             services.Configure(configureAction);
         }
-        else
-        {
-            services.AddOptions<GuardhouseClientOptions>()
-                .ValidateDataAnnotations()
-                .ValidateOnStart();
-        }
+        services.AddOptions<GuardhouseClientOptions>()
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         services.AddSingleton<IClock>(SystemClock.Instance);
 
@@ -65,18 +61,12 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<GuardhouseResourceOptions>? configureAction = null)
     {
-        if (configureAction != null)
+        if (configureAction is not null)
         {
             services.Configure(configureAction);
         }
-        else
-        {
-            services.AddOptions<GuardhouseResourceOptions>()
-                .ValidateDataAnnotations()
-                .ValidateOnStart();
-        }
-
         services.AddOptions<GuardhouseResourceOptions>()
+            .ValidateDataAnnotations()
             .Validate(ValidateGuardhouseResourceOptions)
             .ValidateOnStart();
 
@@ -159,6 +149,19 @@ public static class ServiceCollectionExtensions
         });
     }
 
+    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    {
+        return Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)));
+    }
+
+    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+    {
+        return Policy.TimeoutAsync<HttpResponseMessage>(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
+    }
+
     private static bool ValidateGuardhouseResourceOptions(GuardhouseResourceOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.Authority))
@@ -193,18 +196,5 @@ public static class ServiceCollectionExtensions
         }
 
         return true;
-    }
-
-    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-    {
-        return Policy<HttpResponseMessage>
-            .Handle<HttpRequestException>()
-            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)));
-    }
-
-    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
-    {
-        return Policy.TimeoutAsync<HttpResponseMessage>(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
     }
 }
