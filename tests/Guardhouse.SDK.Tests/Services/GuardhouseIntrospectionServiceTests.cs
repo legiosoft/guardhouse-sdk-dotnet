@@ -176,7 +176,7 @@ public class GuardhouseIntrospectionServiceTests
 
         var service = CreateService();
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => service.IntrospectTokenAsync("test_token"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.IntrospectTokenAsync("test_token"));
     }
 
     [Fact]

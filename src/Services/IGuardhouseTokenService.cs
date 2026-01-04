@@ -34,6 +34,7 @@ public interface IGuardhouseTokenService
 
     /// <summary>
     /// Introspects a token to determine if it is active and retrieve its claims.
+    /// Uses client credentials for authentication to the introspection endpoint.
     /// </summary>
     /// <param name="token">The token to introspect.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>

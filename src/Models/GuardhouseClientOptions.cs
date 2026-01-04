@@ -61,4 +61,18 @@ public class GuardhouseClientOptions
     /// Enables HTTP resilience policies including retry logic with exponential backoff (default: true).
     /// </summary>
     public bool EnableHttpResilience { get; set; } = true;
+
+    /// <summary>
+    /// The client ID for introspection endpoint (optional).
+    /// Use this if you need to introspect tokens from your client application for debugging purposes.
+    /// If not set, the introspection will use ClientId and ClientSecret.
+    /// </summary>
+    public string? IntrospectionClientId { get; set; }
+
+    /// <summary>
+    /// The client secret for introspection endpoint (optional).
+    /// Use this if you need to introspect tokens from your client application for debugging purposes.
+    /// If not set, the introspection will use ClientId and ClientSecret.
+    /// </summary>
+    public string? IntrospectionClientSecret { get; set; }
 }

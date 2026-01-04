@@ -254,6 +254,7 @@ public class GuardhouseTokenService(
 
     /// <summary>
     /// Introspects a token to determine if it is active and retrieve its claims.
+    /// Uses client credentials for authentication to the introspection endpoint.
     /// </summary>
     /// <param name="token">The token to introspect.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
@@ -278,7 +279,10 @@ public class GuardhouseTokenService(
                     request.Content = new FormUrlEncodedContent([
                         new KeyValuePair<string, string>("token", token)
                     ]);
-                    var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{options1.ClientId}:{options1.ClientSecret}"));
+
+                    var clientId = options1.IntrospectionClientId ?? options1.ClientId;
+                    var clientSecret = options1.IntrospectionClientSecret ?? options1.ClientSecret;
+                    var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
                     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
                     return await httpClient.SendAsync(request, ct);
                 },
@@ -289,7 +293,9 @@ public class GuardhouseTokenService(
             logger.LogError(ex, "Failed to send introspection request to {IntrospectionEndpoint}", introspectionEndpoint);
             throw new InvalidOperationException(
                 $"Failed to send introspection request to {introspectionEndpoint}. " +
-                $"Error: {ex.Message}", ex);
+                $"Error: {ex.Message}. " +
+                $"Verify your Guardhouse instance is accessible and credentials are correct. " +
+                $"For introspection, you may need to configure IntrospectionClientId and IntrospectionClientSecret in your GuardhouseClientOptions.", ex);
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -306,7 +312,7 @@ public class GuardhouseTokenService(
                 $"Failed to introspect token from {introspectionEndpoint}. " +
                 $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
                 $"{errorDetails}. " +
-                $"Verify your Guardhouse credentials are configured correctly.");
+                $"Verify your ClientId and ClientSecret are configured correctly.");
         }
 
         var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions

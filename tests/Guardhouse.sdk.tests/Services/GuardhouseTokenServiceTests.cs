@@ -116,7 +116,7 @@ public class GuardhouseTokenServiceTests
 
         var tokenService = CreateTokenService();
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => tokenService.RequestTokenAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RequestTokenAsync());
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public class GuardhouseTokenServiceTests
 
         var tokenService = CreateTokenService();
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => tokenService.RefreshTokenAsync("refresh_token"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RefreshTokenAsync("refresh_token"));
     }
 
     #endregion
@@ -421,7 +421,7 @@ public class GuardhouseTokenServiceTests
 
         var tokenService = CreateTokenService();
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => tokenService.IntrospectTokenAsync("test_token"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.IntrospectTokenAsync("test_token"));
     }
 
     #endregion

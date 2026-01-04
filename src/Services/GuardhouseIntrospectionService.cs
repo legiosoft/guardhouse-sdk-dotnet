@@ -18,6 +18,7 @@ using NodaTime;
 
 /// <summary>
 /// Service for introspecting tokens with the identity server using a micro-cache strategy.
+/// This service should be used by resource servers to validate incoming tokens.
 /// </summary>
 public class GuardhouseIntrospectionService(
     HttpClient httpClient,
@@ -122,6 +123,26 @@ public class GuardhouseIntrospectionService(
         }
 
         return introspectionResponse;
+    }
+
+    /// <summary>
+    /// Checks if a token is currently active.
+    /// </summary>
+    /// <param name="token">The token to check.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>True if the token is active, false otherwise.</returns>
+    public async Task<bool> IsTokenActiveAsync(string token, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var introspectionResult = await IntrospectTokenAsync(token, cancellationToken);
+            return introspectionResult.Active;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check token activity");
+            return false;
+        }
     }
 
     private static string GetTokenHash(string token)
