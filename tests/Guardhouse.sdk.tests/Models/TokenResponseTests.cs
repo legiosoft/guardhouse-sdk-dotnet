@@ -31,7 +31,7 @@ public class TokenResponseTests
         var response = new TokenResponse
         {
             ExpiresIn = 3600
-        };
+        }.WithClock(_clock);
 
         var expectedExpiresIn = Duration.FromSeconds(3600);
 
@@ -50,7 +50,7 @@ public class TokenResponseTests
         {
             AccessToken = "test_token",
             ExpiresIn = 3600
-        };
+        }.WithClock(_clock);
 
         var isExpired = response.IsExpired(bufferSeconds: 300);
 
@@ -64,7 +64,7 @@ public class TokenResponseTests
         {
             AccessToken = "test_token",
             ExpiresIn = -600
-        };
+        }.WithClock(_clock);
 
         var isExpired = response.IsExpired(bufferSeconds: 0);
 
@@ -76,8 +76,9 @@ public class TokenResponseTests
     {
         var response = new TokenResponse
         {
+            AccessToken = "test_token",
             ExpiresIn = 100
-        };
+        }.WithClock(_clock);
 
         var isExpiredWithoutBuffer = response.IsExpired(bufferSeconds: 0);
         var isExpiredWithBuffer = response.IsExpired(bufferSeconds: 120);

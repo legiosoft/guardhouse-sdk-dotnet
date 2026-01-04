@@ -13,8 +13,7 @@ builder.Services.AddGuardhouseResource(options =>
     options.Authority = builder.Configuration["Guardhouse:Authority"]!;
     options.Audience = builder.Configuration["Guardhouse:Audience"]!;
     
-    var validationMode = builder.Configuration["Guardhouse:ValidationMode"];
-    options.ValidationMode = validationMode == "Introspection" 
+    options.ValidationMode = builder.Configuration["Guardhouse:ValidationMode"] == "Introspection" 
         ? TokenValidationMode.Introspection 
         : TokenValidationMode.JwtSignature;
     

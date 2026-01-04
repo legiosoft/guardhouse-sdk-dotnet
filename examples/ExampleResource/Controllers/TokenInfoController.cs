@@ -1,3 +1,4 @@
+using Guardhouse.SDK.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -14,24 +15,24 @@ public class TokenInfoController : ControllerBase
     {
         var accessToken = Request.Headers.Authorization.ToString();
         
-        return Ok(new
-        {
-            Authenticated = User.Identity?.IsAuthenticated ?? false,
-            UserName = User.Identity?.Name,
-            AuthenticationType = User.Identity?.AuthenticationType,
-            Subject = User.FindFirst("sub")?.Value,
-            Issuer = User.FindFirst("iss")?.Value,
-            Audience = User.FindAll("aud").Select(c => c.Value).ToList(),
-            ExpiresAt = User.FindFirst("exp")?.Value,
-            IssuedAt = User.FindFirst("iat")?.Value,
-            Scopes = User.FindAll("scope").Select(c => c.Value).ToList(),
-            Roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
-            TokenType = User.FindFirst("typ")?.Value,
-            JwtId = User.FindFirst("jti")?.Value,
-            AccessTokenPreview = accessToken?.StartsWith("Bearer ") == true 
-                ? accessToken.Substring(7).Substring(0, Math.Min(20, accessToken.Length - 7)) + "..."
-                : "N/A"
-        });
+            return Ok(new
+            {
+                Authenticated = User.Identity?.IsAuthenticated ?? false,
+                UserName = User.Identity?.Name,
+                AuthenticationType = User.Identity?.AuthenticationType,
+                Subject = User.FindFirst("sub")?.Value,
+                Issuer = User.FindFirst("iss")?.Value,
+                Audience = User.FindAll("aud").Select(c => c.Value).ToList(),
+                ExpiresAt = User.FindFirst("exp")?.Value,
+                IssuedAt = User.FindFirst("iat")?.Value,
+                Scopes = User.FindAll("scope").Select(c => c.Value).ToList(),
+                Roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
+                TokenType = User.FindFirst("typ")?.Value,
+                JwtId = User.FindFirst("jti")?.Value,
+                AccessTokenPreview = accessToken?.StartsWith("Bearer ") == true 
+                    ? accessToken.Substring(7).GetPreview(20)
+                    : "N/A"
+            });
     }
 
     [HttpGet("user")]

@@ -1,5 +1,6 @@
 using ExampleClient.DTOs;
 using ExampleClient.Services;
+using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,7 +32,7 @@ public class ProductsController : ControllerBase
             return Ok(new
             {
                 Products = products,
-                AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+                AccessTokenPreview = accessToken.GetPreview(20),
                 Message = "Products retrieved successfully"
             });
         }
@@ -63,7 +64,7 @@ public class ProductsController : ControllerBase
             return Ok(new
             {
                 Product = product,
-                AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+                AccessTokenPreview = accessToken.GetPreview(20),
                 Message = "Product retrieved successfully"
             });
         }
@@ -90,7 +91,7 @@ public class ProductsController : ControllerBase
             return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
             {
                 Product = newProduct,
-                AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+                AccessTokenPreview = accessToken.GetPreview(20),
                 Message = "Product created successfully"
             });
         }
@@ -123,7 +124,7 @@ public class ProductsController : ControllerBase
             return Ok(new
             {
                 Message = $"Product '{product.Name}' deleted successfully",
-                AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "...",
+                AccessTokenPreview = accessToken.GetPreview(20),
                 RemainingProducts = _productService.Count()
             });
         }

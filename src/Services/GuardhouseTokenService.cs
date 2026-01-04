@@ -181,7 +181,7 @@ public class GuardhouseTokenService(
 
         logger.LogInformation("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
-        return tokenResponse;
+        return tokenResponse.WithClock(_clock);
     }
 
     /// <summary>
@@ -249,7 +249,7 @@ public class GuardhouseTokenService(
 
         logger.LogInformation("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
-        return tokenResponse;
+        return tokenResponse.WithClock(_clock);
     }
 
     /// <summary>

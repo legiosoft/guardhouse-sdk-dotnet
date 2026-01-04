@@ -78,7 +78,7 @@ public class GuardhouseClientOptions
 
     /// <summary>
     /// How to send client credentials to the introspection endpoint (default: BasicAuth).
-    /// Use FormData if your identity server does not accept Basic Authentication.
+    /// Use FormData if your identity server does not support Basic Authentication.
     /// </summary>
     public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } = IntrospectionCredentialTransmission.BasicAuth;
 }

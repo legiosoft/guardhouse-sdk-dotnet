@@ -42,6 +42,8 @@ public class GuardhouseIntrospectionService(
     /// <returns>An introspection response containing the token's status and claims.</returns>
     public async Task<IntrospectionResponse> IntrospectTokenAsync(string token, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(token);
+
         var resourceOptions = _options.Value;
 
         if (string.IsNullOrEmpty(resourceOptions.IntrospectionClientId) ||
@@ -60,6 +62,9 @@ public class GuardhouseIntrospectionService(
         }
 
         var introspectionEndpoint = $"{resourceOptions.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
+
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds));
+        using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
 
@@ -89,7 +94,12 @@ public class GuardhouseIntrospectionService(
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken);
+            response = await _httpClient.SendAsync(request, combinedCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+        {
+            _logger.LogError("Introspection request timed out after {TimeoutSeconds} seconds", GuardhouseConstants.Defaults.RequestTimeoutSeconds);
+            throw new TimeoutException($"Introspection request timed out after {GuardhouseConstants.Defaults.RequestTimeoutSeconds} seconds.");
         }
         catch (HttpRequestException ex)
         {
@@ -129,7 +139,12 @@ public class GuardhouseIntrospectionService(
             var cacheTtl = TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds);
             if (cacheTtl > TimeSpan.Zero)
             {
-                _memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
+                var cacheOptions = new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = cacheTtl,
+                    Size = 1
+                };
+                _memoryCache.Set(cacheKey, introspectionResponse, cacheOptions);
                 _logger.LogDebug("Cached introspection result for {CacheTtl}", cacheTtl);
             }
         }

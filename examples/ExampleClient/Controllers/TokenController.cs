@@ -1,3 +1,4 @@
+using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -29,7 +30,7 @@ public class TokenController : ControllerBase
                 TokenType = tokenResponse.TokenType,
                 ExpiresIn = tokenResponse.ExpiresIn,
                 Scope = tokenResponse.Scope,
-                AccessTokenPreview = tokenResponse.AccessToken.Substring(0, Math.Min(20, tokenResponse.AccessToken.Length)) + "..."
+                AccessTokenPreview = tokenResponse.AccessToken.GetPreview(20)
             });
         }
         catch (InvalidOperationException ex)
@@ -65,7 +66,7 @@ public class TokenController : ControllerBase
                 TokenType = refreshedToken.TokenType,
                 ExpiresIn = refreshedToken.ExpiresIn,
                 Message = "Token refreshed successfully",
-                AccessTokenPreview = refreshedToken.AccessToken.Substring(0, Math.Min(20, refreshedToken.AccessToken.Length)) + "..."
+                AccessTokenPreview = refreshedToken.AccessToken.GetPreview(20)
             });
         }
         catch (InvalidOperationException ex)
@@ -118,7 +119,7 @@ public class TokenController : ControllerBase
 
             return Ok(new
             {
-                Token = token.Substring(0, Math.Min(20, token.Length)) + "...",
+                Token = token.GetPreview(20),
                 IsActive = isActive
             });
         }
