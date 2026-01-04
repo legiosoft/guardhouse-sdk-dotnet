@@ -1,62 +1,68 @@
 using ExampleClient.DTOs;
-using ExampleClient.Models;
 
 namespace ExampleClient.Services;
+
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public string? Description { get; set; }
+}
 
 public interface IProductService
 {
     IEnumerable<Product> GetAll();
     Product? GetById(int id);
     Product Create(CreateProductRequest request);
-    bool Delete(int id);
+    void Delete(int id);
     int Count();
 }
 
 public class ProductService : IProductService
 {
-    private static readonly List<Product> Products = new()
+    private static readonly List<Product> _products = new()
     {
-        new() { Id = 1, Name = "Laptop", Price = 999.99m },
-        new() { Id = 2, Name = "Phone", Price = 699.99m },
-        new() { Id = 3, Name = "Tablet", Price = 449.99m }
+        new() { Id = 1, Name = "Laptop", Price = 999.99m, Description = "High-performance laptop" },
+        new() { Id = 2, Name = "Mouse", Price = 29.99m, Description = "Wireless mouse" },
+        new() { Id = 3, Name = "Keyboard", Price = 79.99m, Description = "Mechanical keyboard" }
     };
+    private static int _nextId = 4;
 
     public IEnumerable<Product> GetAll()
     {
-        return Products;
+        return _products;
     }
 
     public Product? GetById(int id)
     {
-        return Products.FirstOrDefault(p => p.Id == id);
+        return _products.FirstOrDefault(p => p.Id == id);
     }
 
     public Product Create(CreateProductRequest request)
     {
-        var newProduct = new Product
+        var product = new Product
         {
-            Id = Products.Max(p => p.Id) + 1,
+            Id = _nextId++,
             Name = request.Name,
-            Price = request.Price
+            Price = request.Price,
+            Description = request.Description
         };
-        
-        Products.Add(newProduct);
-        return newProduct;
+        _products.Add(product);
+        return product;
     }
 
-    public bool Delete(int id)
+    public void Delete(int id)
     {
-        var product = Products.FirstOrDefault(p => p.Id == id);
-        if (product == null)
+        var product = GetById(id);
+        if (product != null)
         {
-            return false;
+            _products.Remove(product);
         }
-
-        return Products.Remove(product);
     }
 
     public int Count()
     {
-        return Products.Count;
+        return _products.Count;
     }
 }

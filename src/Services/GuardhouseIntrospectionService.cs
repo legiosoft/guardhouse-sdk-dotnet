@@ -46,9 +46,9 @@ public class GuardhouseIntrospectionService(
         if (string.IsNullOrEmpty(resourceOptions.IntrospectionClientId) ||
             string.IsNullOrEmpty(resourceOptions.IntrospectionClientSecret))
         {
-            throw new InvalidOperationException("Introspection is enabled but " +
-                                                "IntrospectionClientId and IntrospectionClientSecret " +
-                                                "are not configured.");
+            throw new InvalidOperationException(
+                "Introspection is enabled but IntrospectionClientId and IntrospectionClientSecret are not configured. " +
+                "Please configure these values in GuardhouseResourceOptions.");
         }
 
         var cacheKey = $"{IntrospectionCacheKeyPrefix}{GetTokenHash(token)}";
@@ -73,10 +73,37 @@ public class GuardhouseIntrospectionService(
 
         _logger.LogDebug("Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
 
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Failed to send introspection request to {IntrospectionEndpoint}", introspectionEndpoint);
+            throw new InvalidOperationException(
+                $"Failed to send introspection request to {introspectionEndpoint}. " +
+                $"Error: {ex.Message}. " +
+                $"Verify your Guardhouse instance is accessible and introspection credentials are correct.", ex);
+        }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Introspection request failed with status {StatusCode}. Response: {Response}",
+                response.StatusCode,
+                responseContent);
+
+            var errorDetails = ParseErrorResponse(responseContent);
+            throw new InvalidOperationException(
+                $"Failed to introspect token from {introspectionEndpoint}. " +
+                $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
+                $"{errorDetails}. " +
+                $"Verify your IntrospectionClientId and IntrospectionClientSecret are configured correctly in GuardhouseResourceOptions.");
+        }
+
         var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -103,5 +130,30 @@ public class GuardhouseIntrospectionService(
         var bytes = Encoding.UTF8.GetBytes(token);
         var hash = sha256.ComputeHash(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string ParseErrorResponse(string responseContent)
+    {
+        try
+        {
+            var errorDoc = JsonDocument.Parse(responseContent);
+            var error = errorDoc.RootElement.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null;
+            var errorDescription = errorDoc.RootElement.TryGetProperty("error_description", out var descProp) ? descProp.GetString() : null;
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                if (!string.IsNullOrEmpty(errorDescription))
+                {
+                    return $"Error: {error}. Description: {errorDescription}";
+                }
+                return $"Error: {error}";
+            }
+        }
+        catch
+        {
+            // Ignore JSON parsing errors
+        }
+
+        return $"Response: {responseContent}";
     }
 }

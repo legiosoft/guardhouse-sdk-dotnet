@@ -124,34 +124,62 @@ public class GuardhouseTokenService(
         var options1 = options.Value;
         var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
-        logger.LogDebug("Requesting new token from {TokenEndpoint}", tokenEndpoint);
+        logger.LogInformation("Requesting new token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-        var response = await _retryPolicy.ExecuteAsync(
-            async (ct) =>
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-                request.Content = new FormUrlEncodedContent([
-                    new KeyValuePair<string, string>("client_id", options1.ClientId),
-                    new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
-                    new KeyValuePair<string, string>("grant_type", "client_credentials"),
-                    new KeyValuePair<string, string>("scope", options1.Scope)
-                ]);
-                return await httpClient.SendAsync(request, ct);
-            },
-            combinedCts.Token);
-
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = await _retryPolicy.ExecuteAsync(
+                async (ct) =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+                    request.Content = new FormUrlEncodedContent([
+                        new KeyValuePair<string, string>("client_id", options1.ClientId),
+                        new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
+                        new KeyValuePair<string, string>("grant_type", "client_credentials"),
+                        new KeyValuePair<string, string>("scope", options1.Scope)
+                    ]);
+                    return await httpClient.SendAsync(request, ct);
+                },
+                combinedCts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to send token request to {TokenEndpoint}", tokenEndpoint);
+            throw new InvalidOperationException(
+                $"Failed to send token request to {tokenEndpoint}. " +
+                $"Check your Guardhouse configuration in appsettings.json. " +
+                $"Authority: {options1.Authority}, ClientId: {options1.ClientId}. " +
+                $"Error: {ex.Message}", ex);
+        }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError(
+                "Token request failed with status {StatusCode}. Response: {Response}",
+                response.StatusCode,
+                responseContent);
+
+            var errorDetails = ParseErrorResponse(responseContent);
+            throw new InvalidOperationException(
+                $"Failed to request token from {tokenEndpoint}. " +
+                $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
+                $"{errorDetails}. " +
+                $"Please verify your Guardhouse credentials in appsettings.json. " +
+                $"Authority: {options1.Authority}, ClientId: {options1.ClientId}, Scope: {options1.Scope}");
+        }
+
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        logger.LogDebug("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogInformation("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse;
     }
@@ -167,34 +195,59 @@ public class GuardhouseTokenService(
         var options1 = options.Value;
         var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
 
-        logger.LogDebug("Refreshing token from {TokenEndpoint}", tokenEndpoint);
+        logger.LogInformation("Refreshing token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-        var response = await _retryPolicy.ExecuteAsync(
-            async (ct) =>
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-                request.Content = new FormUrlEncodedContent([
-                    new KeyValuePair<string, string>("client_id", options1.ClientId),
-                    new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
-                    new KeyValuePair<string, string>("grant_type", "refresh_token"),
-                    new KeyValuePair<string, string>("refresh_token", refreshToken)
-                ]);
-                return await httpClient.SendAsync(request, ct);
-            },
-            combinedCts.Token);
-
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = await _retryPolicy.ExecuteAsync(
+                async (ct) =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+                    request.Content = new FormUrlEncodedContent([
+                        new KeyValuePair<string, string>("client_id", options1.ClientId),
+                        new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
+                        new KeyValuePair<string, string>("grant_type", "refresh_token"),
+                        new KeyValuePair<string, string>("refresh_token", refreshToken)
+                    ]);
+                    return await httpClient.SendAsync(request, ct);
+                },
+                combinedCts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to send token refresh request to {TokenEndpoint}", tokenEndpoint);
+            throw new InvalidOperationException(
+                $"Failed to send token refresh request to {tokenEndpoint}. " +
+                $"Error: {ex.Message}", ex);
+        }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError(
+                "Token refresh failed with status {StatusCode}. Response: {Response}",
+                response.StatusCode,
+                responseContent);
+
+            var errorDetails = ParseErrorResponse(responseContent);
+            throw new InvalidOperationException(
+                $"Failed to refresh token from {tokenEndpoint}. " +
+                $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
+                $"{errorDetails}. " +
+                $"Your refresh token may have expired.");
+        }
+
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        logger.LogDebug("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogInformation("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse;
     }
@@ -215,22 +268,47 @@ public class GuardhouseTokenService(
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-        var response = await _retryPolicy.ExecuteAsync(
-            async (ct) =>
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-                request.Content = new FormUrlEncodedContent([
-                    new KeyValuePair<string, string>("token", token)
-                ]);
-                var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{options1.ClientId}:{options1.ClientSecret}"));
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
-                return await httpClient.SendAsync(request, ct);
-            },
-            combinedCts.Token);
-
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = await _retryPolicy.ExecuteAsync(
+                async (ct) =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
+                    request.Content = new FormUrlEncodedContent([
+                        new KeyValuePair<string, string>("token", token)
+                    ]);
+                    var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{options1.ClientId}:{options1.ClientSecret}"));
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+                    return await httpClient.SendAsync(request, ct);
+                },
+                combinedCts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to send introspection request to {IntrospectionEndpoint}", introspectionEndpoint);
+            throw new InvalidOperationException(
+                $"Failed to send introspection request to {introspectionEndpoint}. " +
+                $"Error: {ex.Message}", ex);
+        }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError(
+                "Introspection request failed with status {StatusCode}. Response: {Response}",
+                response.StatusCode,
+                responseContent);
+
+            var errorDetails = ParseErrorResponse(responseContent);
+            throw new InvalidOperationException(
+                $"Failed to introspect token from {introspectionEndpoint}. " +
+                $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
+                $"{errorDetails}. " +
+                $"Verify your Guardhouse credentials are configured correctly.");
+        }
+
         var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -292,5 +370,30 @@ public class GuardhouseTokenService(
                 logger.LogDebug("Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
             }
         }
+    }
+
+    private static string ParseErrorResponse(string responseContent)
+    {
+        try
+        {
+            var errorDoc = JsonDocument.Parse(responseContent);
+            var error = errorDoc.RootElement.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null;
+            var errorDescription = errorDoc.RootElement.TryGetProperty("error_description", out var descProp) ? descProp.GetString() : null;
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                if (!string.IsNullOrEmpty(errorDescription))
+                {
+                    return $"Error: {error}. Description: {errorDescription}";
+                }
+                return $"Error: {error}";
+            }
+        }
+        catch
+        {
+            // Ignore JSON parsing errors
+        }
+
+        return $"Response: {responseContent}";
     }
 }

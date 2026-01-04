@@ -17,6 +17,8 @@ builder.Services.AddGuardhouseClient(options =>
     options.EnableHttpResilience = true;
 });
 
+builder.Services.AddScoped<ExampleClient.Services.IProductService, ExampleClient.Services.ProductService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
