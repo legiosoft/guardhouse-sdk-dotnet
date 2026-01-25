@@ -1,4 +1,6 @@
 using ExampleClient.DTOs;
+using Guardhouse.SDK.Services;
+using System.Text.Json;
 
 namespace ExampleClient.Services;
 
@@ -12,57 +14,128 @@ public class Product
 
 public interface IProductService
 {
-    IEnumerable<Product> GetAll();
-    Product? GetById(int id);
-    Product Create(CreateProductRequest request);
-    void Delete(int id);
-    int Count();
+    Task<IEnumerable<Product>> GetAll();
+    Task<Product?> GetById(int id);
+    Task<Product> Create(CreateProductRequest request);
+    Task<bool> Delete(int id);
+    Task<int> Count();
 }
 
 public class ProductService : IProductService
 {
-    private static readonly List<Product> _products = new()
-    {
-        new() { Id = 1, Name = "Laptop", Price = 999.99m, Description = "High-performance laptop" },
-        new() { Id = 2, Name = "Mouse", Price = 29.99m, Description = "Wireless mouse" },
-        new() { Id = 3, Name = "Keyboard", Price = 79.99m, Description = "Mechanical keyboard" }
-    };
-    private static int _nextId = 4;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly IGuardhouseTokenService _tokenService;
 
-    public IEnumerable<Product> GetAll()
+    private string ResourceServerUrl => _configuration["ResourceServer:BaseUrl"]!;
+
+    public ProductService(IHttpClientFactory httpClientFactory, IConfiguration configuration, IGuardhouseTokenService tokenService)
     {
-        return _products;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _tokenService = tokenService;
     }
 
-    public Product? GetById(int id)
+    private async Task<HttpClient> CreateAuthenticatedClientAsync()
     {
-        return _products.FirstOrDefault(p => p.Id == id);
+        var client = _httpClientFactory.CreateClient();
+        var accessToken = await _tokenService.GetAccessTokenAsync();
+        client.DefaultRequestHeaders.Authorization = 
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        return client;
     }
 
-    public Product Create(CreateProductRequest request)
+    public async Task<IEnumerable<Product>> GetAll()
     {
-        var product = new Product
+        var client = await CreateAuthenticatedClientAsync();
+        var response = await client.GetAsync($"{ResourceServerUrl}/api/products");
+        response.EnsureSuccessStatusCode();
+        
+        var json = await response.Content.ReadAsStringAsync();
+        var document = JsonDocument.Parse(json);
+        
+        if (document.RootElement.TryGetProperty("products", out var productsElement))
         {
-            Id = _nextId++,
-            Name = request.Name,
-            Price = request.Price,
-            Description = request.Description
-        };
-        _products.Add(product);
-        return product;
-    }
-
-    public void Delete(int id)
-    {
-        var product = GetById(id);
-        if (product != null)
-        {
-            _products.Remove(product);
+            var products = new List<Product>();
+            foreach (var item in productsElement.EnumerateArray())
+            {
+                products.Add(new Product
+                {
+                    Id = item.GetProperty("id").GetInt32(),
+                    Name = item.GetProperty("name").GetString() ?? string.Empty,
+                    Price = item.GetProperty("price").GetDecimal(),
+                    Description = item.TryGetProperty("description", out var desc) ? desc.GetString() : null
+                });
+            }
+            return products;
         }
+        
+        return new List<Product>();
     }
 
-    public int Count()
+    public async Task<Product?> GetById(int id)
     {
-        return _products.Count;
+        var client = await CreateAuthenticatedClientAsync();
+        var response = await client.GetAsync($"{ResourceServerUrl}/api/products/{id}");
+        
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var document = JsonDocument.Parse(json);
+        
+        if (document.RootElement.TryGetProperty("product", out var productElement))
+        {
+            return new Product
+            {
+                Id = productElement.GetProperty("id").GetInt32(),
+                Name = productElement.GetProperty("name").GetString() ?? string.Empty,
+                Price = productElement.GetProperty("price").GetDecimal(),
+                Description = productElement.TryGetProperty("description", out var desc) ? desc.GetString() : null
+            };
+        }
+        
+        return null;
+    }
+
+    public async Task<Product> Create(CreateProductRequest request)
+    {
+        var client = await CreateAuthenticatedClientAsync();
+        var response = await client.PostAsJsonAsync($"{ResourceServerUrl}/api/products", request);
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var document = JsonDocument.Parse(json);
+        
+        if (document.RootElement.TryGetProperty("product", out var productElement))
+        {
+            return new Product
+            {
+                Id = productElement.GetProperty("id").GetInt32(),
+                Name = productElement.GetProperty("name").GetString() ?? string.Empty,
+                Price = productElement.GetProperty("price").GetDecimal(),
+                Description = productElement.TryGetProperty("description", out var desc) ? desc.GetString() : null
+            };
+        }
+        
+        throw new InvalidOperationException("Failed to create product");
+    }
+
+    public async Task<bool> Delete(int id)
+    {
+        var client = await CreateAuthenticatedClientAsync();
+        var response = await client.DeleteAsync($"{ResourceServerUrl}/api/products/{id}");
+        
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return false;
+        
+        response.EnsureSuccessStatusCode();
+        return true;
+    }
+
+    public async Task<int> Count()
+    {
+        var products = await GetAll();
+        return products.Count();
     }
 }

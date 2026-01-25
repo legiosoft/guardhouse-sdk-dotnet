@@ -29,7 +29,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    [Authorize(Policy = "ReadScope")]
+    [Authorize]
     public ActionResult<Product> GetById(int id)
     {
         var product = _productService.GetById(id);

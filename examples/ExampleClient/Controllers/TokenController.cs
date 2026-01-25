@@ -1,6 +1,7 @@
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace ExampleClient.Controllers;
 
@@ -17,19 +18,42 @@ public class TokenController : ControllerBase
         _logger = logger;
     }
 
+    private string? GetScopeFromToken(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            
+            var scopeClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "scope");
+            if (scopeClaim != null)
+            {
+                return scopeClaim.Value;
+            }
+            
+            var scpClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "scp");
+            return scpClaim?.Value;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     [HttpGet("current")]
     public async Task<ActionResult> GetCurrentToken()
     {
         try
         {
             var tokenResponse = await _tokenService.RequestTokenAsync();
+            var scopeFromToken = GetScopeFromToken(tokenResponse.AccessToken);
 
             return Ok(new
             {
                 AccessToken = tokenResponse.AccessToken,
                 TokenType = tokenResponse.TokenType,
                 ExpiresIn = tokenResponse.ExpiresIn,
-                Scope = tokenResponse.Scope,
+                Scope = scopeFromToken ?? tokenResponse.Scope,
                 AccessTokenPreview = tokenResponse.AccessToken.GetPreview(20)
             });
         }
@@ -50,33 +74,26 @@ public class TokenController : ControllerBase
     {
         try
         {
-            var tokenResponse = await _tokenService.RequestTokenAsync();
-            var refreshToken = tokenResponse.RefreshToken;
-
-            if (string.IsNullOrEmpty(refreshToken))
-            {
-                return BadRequest(new { Message = "No refresh token available" });
-            }
-
-            var refreshedToken = await _tokenService.RefreshTokenAsync(refreshToken);
+            var accessToken = await _tokenService.GetAccessTokenAsync();
+            var scopeFromToken = GetScopeFromToken(accessToken);
 
             return Ok(new
             {
-                AccessToken = refreshedToken.AccessToken,
-                TokenType = refreshedToken.TokenType,
-                ExpiresIn = refreshedToken.ExpiresIn,
-                Message = "Token refreshed successfully",
-                AccessTokenPreview = refreshedToken.AccessToken.GetPreview(20)
+                AccessToken = accessToken,
+                Scope = scopeFromToken,
+                Message = "Current access token retrieved (auto-refreshed if needed by SDK)",
+                AccessTokenPreview = accessToken.GetPreview(20),
+                Note = "SDK automatically handles token refresh when EnableTokenRefresh = true. This endpoint demonstrates getting the current cached token."
             });
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Failed to refresh token from Guardhouse server");
+            _logger.LogError(ex, "Failed to get access token");
             return BadRequest(new { Message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error refreshing token");
+            _logger.LogError(ex, "Unexpected error getting access token");
             return StatusCode(500, new { Message = "An unexpected error occurred", Error = ex.Message });
         }
     }

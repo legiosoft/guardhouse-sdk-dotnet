@@ -33,14 +33,14 @@ builder.Services.AddGuardhouseResource(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ReadScope", policy =>
-        policy.RequireClaim("scope", "read"));
-    
-    options.AddPolicy("WriteScope", policy =>
-        policy.RequireClaim("scope", "write"));
-    
-    options.AddPolicy("AdminRole", policy =>
-        policy.RequireRole("admin"));
+    // options.AddPolicy("ReadScope", policy =>
+    //     policy.RequireClaim("scope", "read"));
+    //
+    // options.AddPolicy("WriteScope", policy =>
+    //     policy.RequireClaim("scope", "write"));
+    //
+    // options.AddPolicy("AdminRole", policy =>
+    //     policy.RequireRole("admin"));
 });
 
 builder.Services.AddScoped<IProductService, ProductService>();

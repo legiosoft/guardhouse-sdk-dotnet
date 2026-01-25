@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using ExampleClient.DTOs;
 using ExampleClient.Services;
 using Guardhouse.SDK.Extensions;
@@ -21,18 +22,35 @@ public class ProductsController : ControllerBase
         _logger = logger;
     }
 
+    private string? GetScopeFromToken(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            return jwtToken.Claims.FirstOrDefault(c => c.Type == "scope")?.Value 
+                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == "scp")?.Value;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     [HttpGet]
     public async Task<ActionResult> GetAll()
     {
         try
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
-            var products = _productService.GetAll();
+            var products = await _productService.GetAll();
+            var scope = GetScopeFromToken(accessToken);
 
             return Ok(new
             {
                 Products = products,
                 AccessTokenPreview = accessToken.GetPreview(20),
+                Scope = scope,
                 Message = "Products retrieved successfully"
             });
         }
@@ -54,7 +72,8 @@ public class ProductsController : ControllerBase
         try
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
-            var product = _productService.GetById(id);
+            var product = await _productService.GetById(id);
+            var scope = GetScopeFromToken(accessToken);
 
             if (product == null)
             {
@@ -65,6 +84,7 @@ public class ProductsController : ControllerBase
             {
                 Product = product,
                 AccessTokenPreview = accessToken.GetPreview(20),
+                Scope = scope,
                 Message = "Product retrieved successfully"
             });
         }
@@ -86,12 +106,14 @@ public class ProductsController : ControllerBase
         try
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
-            var newProduct = _productService.Create(request);
+            var newProduct = await _productService.Create(request);
+            var scope = GetScopeFromToken(accessToken);
 
             return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
             {
                 Product = newProduct,
                 AccessTokenPreview = accessToken.GetPreview(20),
+                Scope = scope,
                 Message = "Product created successfully"
             });
         }
@@ -113,19 +135,22 @@ public class ProductsController : ControllerBase
         try
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
-            var product = _productService.GetById(id);
+            var product = await _productService.GetById(id);
+            var scope = GetScopeFromToken(accessToken);
+            
             if (product == null)
             {
                 return NotFound();
             }
 
-            _productService.Delete(id);
+            await _productService.Delete(id);
 
             return Ok(new
             {
                 Message = $"Product '{product.Name}' deleted successfully",
                 AccessTokenPreview = accessToken.GetPreview(20),
-                RemainingProducts = _productService.Count()
+                Scope = scope,
+                RemainingProducts = await _productService.Count()
             });
         }
         catch (InvalidOperationException ex)
