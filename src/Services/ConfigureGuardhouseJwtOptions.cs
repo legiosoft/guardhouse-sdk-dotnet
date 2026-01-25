@@ -1,26 +1,21 @@
 namespace Guardhouse.SDK.Services;
 
 using System;
-using System.Threading.Tasks;
+using System.IdentityModel.Tokens.Jwt;
+using Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Constants;
 using Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
-/// <summary>
-/// Configures JWT bearer authentication options for Guardhouse.
-/// Sets up either signature validation or introspection-based validation based on the configured mode.
-/// </summary>
 internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions> resourceOptions)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
-    private const string GuardhouseSchemeName = "Guardhouse";
+    private const string GuardhouseSchemeName = GuardhouseConstants.Authentication.DefaultScheme;
 
-    public void Configure(JwtBearerOptions options)
-    {
-        Configure(GuardhouseSchemeName, options);
-    }
+    public void Configure(JwtBearerOptions options) => Configure(null, options);
 
     public void Configure(string? name, JwtBearerOptions options)
     {
@@ -31,7 +26,7 @@ internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions>
 
         var opts = resourceOptions.Value;
 
-        options.Authority = opts.Authority;
+        options.Authority = opts.Authority.TrimEnd('/');
         options.Audience = opts.Audience;
         options.RequireHttpsMetadata = opts.RequireHttpsMetadata ?? opts.Authority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
@@ -39,24 +34,20 @@ internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions>
         {
             options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
         }
+
         else
         {
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = opts.ValidateIssuer,
-                ValidIssuer = opts.Authority,
-
+                ValidateIssuer = false,
+                ValidIssuer = opts.Authority.TrimEnd('/'),
                 ValidateAudience = opts.ValidateAudience,
                 ValidAudience = opts.Audience,
-
                 ValidateLifetime = opts.ValidateLifetime,
                 ClockSkew = TimeSpan.FromMinutes(GuardhouseConstants.Defaults.ClockSkewMinutes),
-
                 ValidateIssuerSigningKey = opts.ValidateIssuerSigningKey,
-
                 ValidAlgorithms = opts.ValidAlgorithms,
-
-                ValidTypes = opts.TokenTypes,
+                ValidTypes = new[] { "at+jwt", "JWT", "jwt" }
             };
 
             options.Events = new JwtBearerEvents
@@ -69,13 +60,19 @@ internal class ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions>
                     }
 
                     return Task.CompletedTask;
+                },
+
+                OnTokenValidated = context =>
+                {
+                    return Task.CompletedTask;
                 }
             };
-
-            options.RefreshOnIssuerKeyNotFound = true;
-
-            options.AutomaticRefreshInterval = TimeSpan.FromMinutes(opts.JwksRefreshIntervalMinutes);
-            options.BackchannelTimeout = TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
         }
+
+        options.RefreshOnIssuerKeyNotFound = true;
+
+        options.AutomaticRefreshInterval = TimeSpan.FromMinutes(opts.JwksRefreshIntervalMinutes);
+
+        options.BackchannelTimeout = TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
     }
 }

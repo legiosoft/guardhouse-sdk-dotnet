@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Constants;
+using Extensions;
 using Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -71,11 +72,11 @@ public class GuardhouseTokenService(
         {
             if (cachedToken != null && !cachedToken.IsExpired(options1.CacheExpirationBufferSeconds))
             {
-                logger.LogDebug("Using cached access token");
+                logger.LogDebugIf(options1.EnableDebug, "Using cached access token");
                 return cachedToken.AccessToken;
             }
 
-            logger.LogDebug("Cached token expired, requesting new token");
+            logger.LogDebugIf(options1.EnableDebug, "Cached token expired, requesting new token");
         }
 
         await TokenLock.WaitAsync(cancellationToken);
@@ -85,7 +86,7 @@ public class GuardhouseTokenService(
             {
                 if (cachedToken != null && !cachedToken.IsExpired(options1.CacheExpirationBufferSeconds))
                 {
-                    logger.LogDebug("Using cached access token (double-checked)");
+                    logger.LogDebugIf(options1.EnableDebug, "Using cached access token (double-checked)");
                     return cachedToken.AccessToken;
                 }
             }
@@ -264,7 +265,7 @@ public class GuardhouseTokenService(
         var options1 = options.Value;
         var introspectionEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
 
-        logger.LogDebug("Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
+        logger.LogDebugIf(options1.EnableDebug, "Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -333,7 +334,7 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
 
-        logger.LogDebug("Token introspection completed, active: {Active}", introspectionResponse.Active);
+        logger.LogDebugIf(options1.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
 
         return introspectionResponse;
     }
@@ -374,7 +375,7 @@ public class GuardhouseTokenService(
                 };
 
                 memoryCache.Set(GetTokenCacheKey(), tokenResponse, cacheOptions);
-                logger.LogDebug("Cached access token until {ExpirationInstant}", expirationInstant);
+                logger.LogDebugIf(options1.EnableDebug, "Cached access token until {ExpirationInstant}", expirationInstant);
             }
 
             if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
@@ -386,7 +387,7 @@ public class GuardhouseTokenService(
                 };
 
                 memoryCache.Set(GetRefreshTokenCacheKey(), tokenResponse.RefreshToken, refreshCacheOptions);
-                logger.LogDebug("Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
+                logger.LogDebugIf(options1.EnableDebug, "Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
             }
         }
     }

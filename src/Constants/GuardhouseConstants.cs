@@ -28,6 +28,11 @@ public static class GuardhouseConstants
         public const string BearerPrefix = "Bearer ";
     }
 
+    public static class Authentication
+    {
+        public const string DefaultScheme = "Guardhouse";
+    }
+
     public static class JwtClaims
     {
         public const string Type = "typ";

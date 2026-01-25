@@ -77,6 +77,11 @@ public class GuardhouseClientOptions
     public string? IntrospectionClientSecret { get; set; }
 
     /// <summary>
+    /// Enables debug logging including console output and debug-level logger messages (default: false).
+    /// </summary>
+    public bool EnableDebug { get; set; }
+
+    /// <summary>
     /// How to send client credentials to the introspection endpoint (default: BasicAuth).
     /// Use FormData if your identity server does not support Basic Authentication.
     /// </summary>

@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Constants;
+using Extensions;
 using Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -57,7 +58,7 @@ public class GuardhouseIntrospectionService(
         var cacheKey = $"{IntrospectionCacheKeyPrefix}{GetTokenHash(token)}";
         if (_memoryCache.TryGetValue(cacheKey, out IntrospectionResponse? cachedResult) && cachedResult != null)
         {
-            _logger.LogDebug("Using cached introspection result");
+            _logger.LogDebugIf(_options.Value.EnableDebug, "Using cached introspection result");
             return cachedResult;
         }
 
@@ -89,7 +90,7 @@ public class GuardhouseIntrospectionService(
 
         request.Content = new FormUrlEncodedContent(formData);
 
-        _logger.LogDebug("Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
+        _logger.LogDebugIf(_options.Value.EnableDebug, "Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
 
         HttpResponseMessage response;
         try
@@ -132,7 +133,7 @@ public class GuardhouseIntrospectionService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
 
-        _logger.LogDebug("Token introspection completed, active: {Active}", introspectionResponse.Active);
+        _logger.LogDebugIf(_options.Value.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
 
         if (introspectionResponse.Active)
         {
@@ -140,7 +141,7 @@ public class GuardhouseIntrospectionService(
             if (cacheTtl > TimeSpan.Zero)
             {
                 _memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
-                _logger.LogDebug("Cached introspection result for {CacheTtl}", cacheTtl);
+                _logger.LogDebugIf(_options.Value.EnableDebug, "Cached introspection result for {CacheTtl}", cacheTtl);
             }
         }
 
