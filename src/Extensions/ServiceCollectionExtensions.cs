@@ -1,3 +1,4 @@
+// ReSharper disable RedundantNameQualifier
 namespace Guardhouse.SDK.Extensions;
 
 using System.Net.Http;
@@ -9,192 +10,224 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Polly;
+using Polly.Timeout;
 
 /// <summary>
-/// Extension methods for configuring Guardhouse services in the dependency injection container.
+/// Extension methods for configuring Guardhouse services in dependency injection container.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Adds the Guardhouse client services to the dependency injection container.
-    /// This enables your application to obtain access tokens from the identity server.
-    /// </summary>
     /// <param name="services">The service collection to add services to.</param>
-    /// <param name="configureAction">Optional action to configure Guardhouse client options.</param>
-    /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddGuardhouseClient(
-        this IServiceCollection services,
-        Action<GuardhouseClientOptions>? configureAction = null)
+    extension(IServiceCollection services)
     {
-        if (configureAction is not null)
+        /// <summary>
+        /// Adds Guardhouse client services to dependency injection container.
+        /// This enables your application to obtain access tokens from identity server.
+        /// </summary>
+        /// <param name="configureAction">Optional action to configure Guardhouse client options.</param>
+        /// <returns>The service collection for method chaining.</returns>
+        public IServiceCollection AddGuardhouseClient(Action<GuardhouseClientOptions>? configureAction = null)
         {
-            services.Configure(configureAction);
+            if (configureAction is not null)
+            {
+                services.Configure(configureAction);
+            }
+            services.AddOptions<GuardhouseClientOptions>()
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
+
+            services.AddSingleton<IClock>(SystemClock.Instance);
+            services.AddMemoryCache();
+
+            // AddHttpClient already registers the service - no need for AddScoped
+            services.AddHttpClient<IGuardhouseTokenService, GuardhouseTokenService>((_, client) =>
+                {
+                    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+                })
+                .AddPolicyHandler((sp, _) => GetRetryPolicy(sp))
+                .AddPolicyHandler((sp, _) => GetTimeoutPolicy(sp));
+
+            return services;
         }
-        services.AddOptions<GuardhouseClientOptions>()
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
 
-        services.AddSingleton<IClock>(SystemClock.Instance);
-
-        services.AddHttpClient<IGuardhouseTokenService, GuardhouseTokenService>((sp, client) =>
+        /// <summary>
+        /// Adds Guardhouse resource server services to dependency injection container.
+        /// This enables your application to validate incoming JWT tokens.
+        /// </summary>
+        /// <param name="configureAction">Optional action to configure Guardhouse resource options.</param>
+        /// <returns>The service collection for method chaining.</returns>
+        public IServiceCollection AddGuardhouseResource(Action<GuardhouseResourceOptions>? configureAction = null)
         {
-            var options = sp.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
-            client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
-        })
-        .AddPolicyHandler(GetRetryPolicy())
-        .AddPolicyHandler(GetTimeoutPolicy());
+            if (configureAction is not null)
+            {
+                services.Configure(configureAction);
+            }
+            services.AddOptions<GuardhouseResourceOptions>()
+                .ValidateDataAnnotations()
+                .Validate(options =>
+                {
+                    if (string.IsNullOrWhiteSpace(options.Authority))
+                    {
+                        return false;
+                    }
 
-        services.AddMemoryCache();
-        services.AddScoped<IGuardhouseTokenService, GuardhouseTokenService>();
+                    if (string.IsNullOrWhiteSpace(options.Audience))
+                    {
+                        return false;
+                    }
 
-        return services;
-    }
+                    if (options.ValidationMode == TokenValidationMode.Introspection)
+                    {
+                        if (string.IsNullOrWhiteSpace(options.IntrospectionClientId))
+                        {
+                            return false;
+                        }
 
-    /// <summary>
-    /// Adds the Guardhouse resource server services to the dependency injection container.
-    /// This enables your application to validate incoming JWT tokens.
-    /// </summary>
-    /// <param name="services">The service collection to add services to.</param>
-    /// <param name="configureAction">Optional action to configure Guardhouse resource options.</param>
-    /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddGuardhouseResource(
-        this IServiceCollection services,
-        Action<GuardhouseResourceOptions>? configureAction = null)
-    {
-        if (configureAction is not null)
-        {
-            services.Configure(configureAction);
+                        if (string.IsNullOrWhiteSpace(options.IntrospectionClientSecret))
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }, 
+                    "Guardhouse resource configuration is invalid. Ensure Authority, " +
+                    "Audience are set, and when using Introspection mode, " +
+                    "IntrospectionClientId and IntrospectionClientSecret are also configured.")
+                .ValidateOnStart();
+
+            services.AddMemoryCache();
+
+            // Add the Guardhouse scheme without overriding the default
+            services.AddAuthentication()
+                .AddJwtBearer(GuardhouseConstants.Authentication.DefaultScheme, _ => { });
+
+            // AddHttpClient already registers the service - no need for AddScoped
+            services.AddHttpClient<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>((_, client) =>
+                {
+                    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+                })
+                .AddPolicyHandler((sp, _) => GetRetryPolicyForResource(sp))
+                .AddPolicyHandler((sp, _) => GetTimeoutPolicyForResource(sp));
+
+            services.AddScoped<IGuardhouseResourceService, GuardhouseResourceService>();
+            services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
+            services.AddSingleton<IConfigureNamedOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
+
+            return services;
         }
-        services.AddOptions<GuardhouseResourceOptions>()
-            .ValidateDataAnnotations()
-            .Validate(ValidateGuardhouseResourceOptions)
-            .ValidateOnStart();
 
-        services.AddMemoryCache();
-
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer();
-
-        services.AddHttpClient<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>((_, client) =>
+        /// <summary>
+        /// Adds both Guardhouse client and resource server services to dependency injection container.
+        /// This is a convenience method that calls both AddGuardhouseClient and AddGuardhouseResource.
+        /// </summary>
+        /// <param name="configureClientAction">Optional action to configure Guardhouse client options.</param>
+        /// <param name="configureResourceAction">Optional action to configure Guardhouse resource options.</param>
+        /// <returns>The service collection for method chaining.</returns>
+        public IServiceCollection AddGuardhouse(Action<GuardhouseClientOptions>? configureClientAction = null,
+            Action<GuardhouseResourceOptions>? configureResourceAction = null)
         {
-            client.Timeout = TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
-        });
-        services.AddScoped<IGuardhouseIntrospectionService, GuardhouseIntrospectionService>();
-        services.AddScoped<IGuardhouseResourceService, GuardhouseResourceService>();
-        services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
-        services.AddSingleton<IConfigureNamedOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
+            services.AddGuardhouseClient(configureClientAction);
+            services.AddGuardhouseResource(configureResourceAction);
+            return services;
+        }
 
-        return services;
-    }
-
-    /// <summary>
-    /// Adds both Guardhouse client and resource server services to the dependency injection container.
-    /// This is a convenience method that calls both AddGuardhouseClient and AddGuardhouseResource.
-    /// </summary>
-    /// <param name="services">The service collection to add services to.</param>
-    /// <param name="configureClientAction">Optional action to configure Guardhouse client options.</param>
-    /// <param name="configureResourceAction">Optional action to configure Guardhouse resource options.</param>
-    /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddGuardhouse(
-        this IServiceCollection services,
-        Action<GuardhouseClientOptions>? configureClientAction = null,
-        Action<GuardhouseResourceOptions>? configureResourceAction = null)
-    {
-        services.AddGuardhouseClient(configureClientAction);
-        services.AddGuardhouseResource(configureResourceAction);
-        return services;
-    }
-
-    /// <summary>
-    /// Adds the Guardhouse client services with simple configuration using individual parameters.
-    /// </summary>
-    /// <param name="services">The service collection to add services to.</param>
-    /// <param name="authority">The authority URL of the identity server.</param>
-    /// <param name="clientId">The client ID assigned to your application.</param>
-    /// <param name="clientSecret">The client secret for your application.</param>
-    /// <param name="scope">The scope(s) to request (default: "api").</param>
-    /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddGuardhouseClient(
-        this IServiceCollection services,
-        string authority,
-        string clientId,
-        string clientSecret,
-        string scope = GuardhouseConstants.Defaults.DefaultScope)
-    {
-        return services.AddGuardhouseClient(options =>
+        /// <summary>
+        /// Adds Guardhouse client services with simple configuration using individual parameters.
+        /// </summary>
+        /// <param name="authority">The authority URL of identity server.</param>
+        /// <param name="clientId">The client ID assigned to your application.</param>
+        /// <param name="clientSecret">The client secret for your application.</param>
+        /// <param name="scope">The scope(s) to request (default: "api").</param>
+        /// <returns>The service collection for method chaining.</returns>
+        public IServiceCollection AddGuardhouseClient(string authority,
+            string clientId,
+            string clientSecret,
+            string scope = GuardhouseConstants.Defaults.DefaultScope)
         {
-            options.Authority = authority;
-            options.ClientId = clientId;
-            options.ClientSecret = clientSecret;
-            options.Scope = scope;
-        });
-    }
+            return services.AddGuardhouseClient(options =>
+            {
+                options.Authority = authority;
+                options.ClientId = clientId;
+                options.ClientSecret = clientSecret;
+                options.Scope = scope;
+            });
+        }
 
-    /// <summary>
-    /// Adds the Guardhouse resource server services with simple configuration using individual parameters.
-    /// </summary>
-    /// <param name="services">The service collection to add services to.</param>
-    /// <param name="authority">The authority URL of the identity server.</param>
-    /// <param name="audience">The audience that your resource server expects.</param>
-    /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddGuardhouseResource(
-        this IServiceCollection services,
-        string authority,
-        string audience)
-    {
-        return services.AddGuardhouseResource(options =>
+        /// <summary>
+        /// Adds Guardhouse resource server services with simple configuration using individual parameters.
+        /// </summary>
+        /// <param name="authority">The authority URL of identity server.</param>
+        /// <param name="audience">The audience that your resource server expects.</param>
+        /// <returns>The service collection for method chaining.</returns>
+        public IServiceCollection AddGuardhouseResource(string authority,
+            string audience)
         {
-            options.Authority = authority;
-            options.Audience = audience;
-        });
+            return services.AddGuardhouseResource(options =>
+            {
+                options.Authority = authority;
+                options.Audience = audience;
+            });
+        }
     }
 
-    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy(IServiceProvider serviceProvider)
     {
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+
+        // Handle network exceptions, server 5xx errors (500-599), timeouts, 429 rate limits, and 408 timeout
         return Policy<HttpResponseMessage>
             .Handle<HttpRequestException>()
+            .Or<TimeoutRejectedException>()
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)));
+            .OrResult(msg => (int)msg.StatusCode >= 500 && (int)msg.StatusCode < 600)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.BadGateway)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.GatewayTimeout)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.RequestTimeout)
+            .WaitAndRetryAsync(
+                options.MaxRetryAttempts,
+                retryAttempt =>
+                {
+                    var baseDelay = TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1));
+                    var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 100));
+                    return baseDelay + jitter;
+                });
     }
 
-    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy(IServiceProvider serviceProvider)
     {
-        return Policy.TimeoutAsync<HttpResponseMessage>(GuardhouseConstants.Defaults.RequestTimeoutSeconds);
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+        return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
     }
 
-    private static bool ValidateGuardhouseResourceOptions(GuardhouseResourceOptions options)
+    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicyForResource(IServiceProvider sp)
     {
-        if (string.IsNullOrWhiteSpace(options.Authority))
-        {
-            throw new OptionsValidationException("Guardhouse Resource: Authority is required.", typeof(GuardhouseResourceOptions), ["Authority"]);
-        }
+        var options = sp.GetRequiredService<IOptions<GuardhouseResourceOptions>>().Value;
 
-        if (string.IsNullOrWhiteSpace(options.Audience))
-        {
-            throw new OptionsValidationException("Guardhouse Resource: Audience is required.", typeof(GuardhouseResourceOptions), ["Audience"]);
-        }
+        // Handle network exceptions, server 5xx errors (500-599), timeouts, 429 rate limits, and 408 timeout
+        return Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .Or<TimeoutRejectedException>()
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            .OrResult(msg => (int)msg.StatusCode >= 500 && (int)msg.StatusCode < 600)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.BadGateway)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.GatewayTimeout)
+            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.RequestTimeout)
+            .WaitAndRetryAsync(
+                options.MaxRetryAttempts,
+                retryAttempt =>
+                {
+                    var baseDelay = TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1));
+                    var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 100));
+                    return baseDelay + jitter;
+                });
+    }
 
-        if (options.ValidationMode == TokenValidationMode.Introspection)
-        {
-            if (string.IsNullOrWhiteSpace(options.IntrospectionClientId))
-            {
-                throw new OptionsValidationException(
-                    "Guardhouse Resource: IntrospectionClientId is required when ValidationMode is set to Introspection. " +
-                    "Please configure IntrospectionClientId and IntrospectionClientSecret for introspection-based token validation.",
-                    typeof(GuardhouseResourceOptions),
-                    ["IntrospectionClientId"]);
-            }
-
-            if (string.IsNullOrWhiteSpace(options.IntrospectionClientSecret))
-            {
-                throw new OptionsValidationException(
-                    "Guardhouse Resource: IntrospectionClientSecret is required when ValidationMode is set to Introspection. " +
-                    "Please configure IntrospectionClientId and IntrospectionClientSecret for introspection-based token validation.",
-                    typeof(GuardhouseResourceOptions),
-                    ["IntrospectionClientSecret"]);
-            }
-        }
-
-        return true;
+    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicyForResource(IServiceProvider sp)
+    {
+        var options = sp.GetRequiredService<IOptions<GuardhouseResourceOptions>>().Value;
+        return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
     }
 }

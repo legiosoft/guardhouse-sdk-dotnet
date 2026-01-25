@@ -23,7 +23,8 @@ public class GuardhouseResourceOptions
     [RequiredIfIntrospection(ErrorMessage = "IntrospectionClientId is required when ValidationMode is Introspection")]
     public string? IntrospectionClientId { get; set; }
 
-    [RequiredIfIntrospection(ErrorMessage = "IntrospectionClientSecret is required when ValidationMode is Introspection")]
+    [RequiredIfIntrospection(ErrorMessage =
+        "IntrospectionClientSecret is required when ValidationMode is Introspection")]
     public string? IntrospectionClientSecret { get; set; }
 
     public bool EnableIntrospection => ValidationMode == TokenValidationMode.Introspection;
@@ -75,10 +76,21 @@ public class GuardhouseResourceOptions
     public int IntrospectionCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionCacheTtlSeconds;
 
     /// <summary>
+    /// The timeout in seconds for HTTP requests to the identity server (default: 30).
+    /// </summary>
+    public int RequestTimeoutSeconds { get; set; } = GuardhouseConstants.Defaults.RequestTimeoutSeconds;
+
+    /// <summary>
+    /// The maximum number of retry attempts for failed HTTP requests (default: 3).
+    /// </summary>
+    public int MaxRetryAttempts { get; set; } = GuardhouseConstants.Defaults.MaxRetryAttempts;
+
+    /// <summary>
     /// How to send client credentials to the introspection endpoint (default: BasicAuth).
     /// Use FormData if your identity server does not accept Basic Authentication.
     /// </summary>
-    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } = IntrospectionCredentialTransmission.BasicAuth;
+    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } =
+        IntrospectionCredentialTransmission.BasicAuth;
 
     /// <summary>
     /// The list of valid signing algorithms for tokens (default: ["RS256"]).
