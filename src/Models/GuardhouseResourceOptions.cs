@@ -1,7 +1,7 @@
 namespace Guardhouse.SDK.Models;
 
-using System.ComponentModel.DataAnnotations;
 using Constants;
+using System.ComponentModel.DataAnnotations;
 using Validation;
 
 /// <summary>
@@ -31,7 +31,7 @@ public class GuardhouseResourceOptions
     /// <summary>
     /// The policy name for the JWT bearer authentication scheme (default: "Guardhouse").
     /// </summary>
-    public string PolicyName { get; set; } = "Guardhouse";
+    public string PolicyName { get; set; } = GuardhouseConstants.Authentication.DefaultScheme;
 
     /// <summary>
     /// Whether to validate the token issuer (default: true).
@@ -89,4 +89,9 @@ public class GuardhouseResourceOptions
     /// The list of valid token types (default: ["JWT"]).
     /// </summary>
     public string[] TokenTypes { get; set; } = [GuardhouseConstants.TokenTypes.Jwt];
+
+    /// <summary>
+    /// Enables debug logging including console output and debug-level logger messages (default: false).
+    /// </summary>
+    public bool EnableDebug { get; set; }
 }
