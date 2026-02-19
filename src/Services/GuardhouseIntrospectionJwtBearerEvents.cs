@@ -2,7 +2,6 @@
 namespace Guardhouse.SDK.Services;
 
 using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Threading;
@@ -44,25 +43,25 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return;
         }
 
-        var result = await BuildIdentityFromIntrospectionAsync(
+        var (identity, failureReason) = await BuildIdentityFromIntrospectionAsync(
             token,
             context.Options.TokenValidationParameters,
             context.Scheme.Name,
             context.HttpContext.RequestAborted);
 
-        if (result.Identity == null)
+        if (identity == null)
         {
-            context.Fail(result.FailureReason ?? "Token validation failed");
+            context.Fail(failureReason ?? "Token validation failed");
             return;
         }
 
         if (context.SecurityToken is JwtSecurityToken && context.Principal?.Identity is ClaimsIdentity jwtIdentity)
         {
-            MergeClaims(jwtIdentity, result.Identity.Claims);
+            GuardhouseIntrospectionLogic.MergeClaims(jwtIdentity, identity.Claims);
         }
         else
         {
-            context.Principal = new ClaimsPrincipal(result.Identity);
+            context.Principal = new ClaimsPrincipal(identity);
         }
 
         await base.TokenValidated(context);
@@ -118,41 +117,4 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         return false;
     }
 
-    private static void MergeClaims(ClaimsIdentity target, IEnumerable<Claim> additionalClaims)
-    {
-        var existingClaims = new HashSet<Claim>(target.Claims, ClaimTypeValueComparer.Instance);
-        foreach (var claim in additionalClaims)
-        {
-            if (existingClaims.Add(claim))
-            {
-                target.AddClaim(claim);
-            }
-        }
-    }
-
-    private sealed class ClaimTypeValueComparer : IEqualityComparer<Claim>
-    {
-        public static ClaimTypeValueComparer Instance { get; } = new();
-
-        public bool Equals(Claim? x, Claim? y)
-        {
-            if (ReferenceEquals(x, y))
-            {
-                return true;
-            }
-
-            if (x is null || y is null)
-            {
-                return false;
-            }
-
-            return string.Equals(x.Type, y.Type, StringComparison.Ordinal)
-                   && string.Equals(x.Value, y.Value, StringComparison.Ordinal);
-        }
-
-        public int GetHashCode(Claim obj)
-        {
-            return HashCode.Combine(obj.Type, obj.Value);
-        }
-    }
 }
