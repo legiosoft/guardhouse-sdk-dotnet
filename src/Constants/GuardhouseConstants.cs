@@ -62,6 +62,7 @@ public static class GuardhouseConstants
         public const string DefaultScope = "api";
         public const int IntrospectionCacheTtlSeconds = 5;
         public const int RefreshTokenCacheDurationDays = 30;
+        public const int IntrospectionNegativeCacheTtlSeconds = 10;
     }
 
     public static class Validation
