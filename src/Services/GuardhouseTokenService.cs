@@ -2,6 +2,7 @@ namespace Guardhouse.SDK.Services;
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -46,7 +47,7 @@ public class GuardhouseTokenService(
                 })
         : Policy.NoOpAsync<HttpResponseMessage>();
 
-    private static readonly SemaphoreSlim TokenLock = new(1, 1);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> TokenLocks = new(StringComparer.Ordinal);
 
     private string GetTokenCacheKey()
     {
@@ -79,7 +80,8 @@ public class GuardhouseTokenService(
             logger.LogDebugIf(options1.EnableDebug, "Cached token expired, requesting new token");
         }
 
-        await TokenLock.WaitAsync(cancellationToken);
+        var clientLock = TokenLocks.GetOrAdd(options1.ClientId, _ => new SemaphoreSlim(1, 1));
+        await clientLock.WaitAsync(cancellationToken);
         try
         {
             if (options1.EnableTokenCaching && memoryCache.TryGetValue(GetTokenCacheKey(), out cachedToken))
@@ -111,7 +113,7 @@ public class GuardhouseTokenService(
         }
         finally
         {
-            TokenLock.Release();
+            clientLock.Release();
         }
     }
 
@@ -350,16 +352,8 @@ public class GuardhouseTokenService(
     /// <returns>True if the token is active, false otherwise.</returns>
     public async Task<bool> IsTokenActiveAsync(string token, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var introspectionResult = await IntrospectTokenAsync(token, cancellationToken);
-            return introspectionResult.Active;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to check token activity");
-            return false;
-        }
+        var introspectionResult = await IntrospectTokenAsync(token, cancellationToken);
+        return introspectionResult.Active;
     }
 
     private void CacheToken(TokenResponse tokenResponse)
@@ -383,16 +377,42 @@ public class GuardhouseTokenService(
 
             if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
             {
-                var refreshCacheExpiration = Duration.FromDays(30);
-                var refreshCacheOptions = new MemoryCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = refreshCacheExpiration.ToTimeSpan()
-                };
+                var refreshCacheDuration = GetRefreshTokenCacheDuration(tokenResponse, options1);
+                var refreshCacheExpiration = refreshCacheDuration - Duration.FromSeconds(options1.CacheExpirationBufferSeconds);
 
-                memoryCache.Set(GetRefreshTokenCacheKey(), tokenResponse.RefreshToken, refreshCacheOptions);
-                logger.LogDebugIf(options1.EnableDebug, "Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
+                if (refreshCacheExpiration > Duration.Zero)
+                {
+                    var refreshCacheOptions = new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = refreshCacheExpiration.ToTimeSpan()
+                    };
+
+                    memoryCache.Set(GetRefreshTokenCacheKey(), tokenResponse.RefreshToken, refreshCacheOptions);
+                    logger.LogDebugIf(options1.EnableDebug, "Cached refresh token for {RefreshCacheExpiration}", refreshCacheExpiration);
+                }
+                else
+                {
+                    logger.LogDebugIf(options1.EnableDebug,
+                        "Skipping refresh token cache because expiration is non-positive (duration={RefreshCacheDuration})",
+                        refreshCacheDuration);
+                }
             }
         }
+    }
+
+    private static Duration GetRefreshTokenCacheDuration(TokenResponse tokenResponse, GuardhouseClientOptions options1)
+    {
+        if (tokenResponse.RefreshTokenExpiresIn.HasValue)
+        {
+            var refreshExpiresIn = tokenResponse.RefreshTokenExpiresIn.Value;
+            return refreshExpiresIn > 0
+                ? Duration.FromSeconds(refreshExpiresIn)
+                : Duration.Zero;
+        }
+
+        return options1.RefreshTokenCacheDurationDays > 0
+            ? Duration.FromDays(options1.RefreshTokenCacheDurationDays)
+            : Duration.Zero;
     }
 
     private static string ParseErrorResponse(string responseContent)
