@@ -1,8 +1,14 @@
+using System;
+using System.Threading;
 using FluentAssertions;
+using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Moq;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace Guardhouse.SDK.Tests.Services;
@@ -10,26 +16,98 @@ namespace Guardhouse.SDK.Tests.Services;
 public class GuardhouseResourceServiceTests
 {
     private readonly Mock<IAuthenticationSchemeProvider> _mockSchemeProvider;
+    private readonly Mock<IGuardhouseIntrospectionService> _mockIntrospectionService;
+    private readonly Mock<IOptionsMonitor<JwtBearerOptions>> _mockJwtBearerOptions;
     private readonly GuardhouseResourceService _service;
 
     public GuardhouseResourceServiceTests()
     {
         _mockSchemeProvider = new Mock<IAuthenticationSchemeProvider>();
-        _service = new GuardhouseResourceService(_mockSchemeProvider.Object);
+        _mockIntrospectionService = new Mock<IGuardhouseIntrospectionService>();
+        _mockJwtBearerOptions = new Mock<IOptionsMonitor<JwtBearerOptions>>();
+
+        _service = CreateService(new GuardhouseResourceOptions
+        {
+            Authority = "https://auth.example.com",
+            Audience = "api",
+            ValidationMode = TokenValidationMode.Introspection
+        });
+    }
+
+    private GuardhouseResourceService CreateService(GuardhouseResourceOptions options)
+    {
+        var jwtOptions = new JwtBearerOptions
+        {
+            MapInboundClaims = false,
+            TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false,
+                RequireExpirationTime = true,
+                ClockSkew = TimeSpan.Zero,
+                ValidAlgorithms = [GuardhouseConstants.Algorithms.RS256],
+                NameClaimType = "name",
+                RoleClaimType = "role"
+            }
+        };
+
+        _mockJwtBearerOptions
+            .Setup(x => x.Get(options.PolicyName))
+            .Returns(jwtOptions);
+
+        return new GuardhouseResourceService(
+            _mockIntrospectionService.Object,
+            _mockSchemeProvider.Object,
+            Options.Create(options),
+            _mockJwtBearerOptions.Object);
     }
 
     #region ValidateTokenAsync Tests
 
     [Fact]
-    public async Task ValidateTokenAsync_ShouldThrowInvalidOperationException()
+    public async Task ValidateTokenAsync_WithIntrospectionMode_ShouldReturnPrincipal()
     {
-        var token = "test_token";
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("test_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Scope = "api"
+            });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.ValidateTokenAsync(token));
+        var principal = await _service.ValidateTokenAsync("test_token");
 
-        exception.Message.Should().Contain("HttpContext context");
-        exception.Message.Should().Contain("JWT bearer authentication");
+        principal.Should().NotBeNull();
+        principal!.FindFirst(GuardhouseConstants.JwtClaims.Subject)?.Value.Should().Be("user");
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_WithInactiveToken_ShouldReturnNull()
+    {
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("test_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = false
+            });
+
+        var principal = await _service.ValidateTokenAsync("test_token");
+
+        principal.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_WhenIntrospectionFails_ShouldReturnNull()
+    {
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("test_token", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("network error"));
+
+        var principal = await _service.ValidateTokenAsync("test_token");
+
+        principal.Should().BeNull();
     }
 
     #endregion
@@ -37,15 +115,18 @@ public class GuardhouseResourceServiceTests
     #region IntrospectTokenAsync Tests
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldThrowInvalidOperationException()
+    public async Task IntrospectTokenAsync_ShouldProxyService()
     {
         var token = "test_token";
+        var expectedResponse = new IntrospectionResponse { Active = true };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.IntrospectTokenAsync(token));
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(token, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
 
-        exception.Message.Should().Contain("authentication pipeline");
-        exception.Message.Should().Contain("IGuardhouseIntrospectionService");
+        var response = await _service.IntrospectTokenAsync(token);
+
+        response.Should().BeSameAs(expectedResponse);
     }
 
     #endregion
