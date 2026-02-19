@@ -33,6 +33,12 @@ public record TokenResponse
     public string? RefreshToken { get; init; }
 
     /// <summary>
+    /// The number of seconds until the refresh token expires, if provided by the identity server.
+    /// </summary>
+    [JsonPropertyName("refresh_token_expires_in")]
+    public int? RefreshTokenExpiresIn { get; init; }
+
+    /// <summary>
     /// The scope(s) granted to the access token.
     /// </summary>
     [JsonPropertyName("scope")]
