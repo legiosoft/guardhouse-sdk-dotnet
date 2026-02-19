@@ -13,8 +13,7 @@ public interface IGuardhouseResourceService
 {
     /// <summary>
     /// Validates a token and returns the claims principal if valid.
-    /// Note: This method requires HttpContext context and will throw an InvalidOperationException if called directly.
-    /// Use the built-in JWT bearer authentication for proper validation.
+    /// Uses the configured validation mode (JWT signature or introspection).
     /// </summary>
     /// <param name="token">The token to validate.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
@@ -23,8 +22,6 @@ public interface IGuardhouseResourceService
 
     /// <summary>
     /// Introspects a token to determine if it is active.
-    /// Note: Token introspection is handled by the authentication pipeline.
-    /// Use IGuardhouseIntrospectionService directly if needed.
     /// </summary>
     /// <param name="token">The token to introspect.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
