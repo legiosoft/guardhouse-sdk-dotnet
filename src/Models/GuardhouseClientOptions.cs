@@ -48,6 +48,12 @@ public class GuardhouseClientOptions
     public int CacheExpirationBufferSeconds { get; set; } = GuardhouseConstants.Defaults.CacheExpirationBufferSeconds;
 
     /// <summary>
+    /// The fallback number of days to cache refresh tokens when the identity provider does not return
+    /// refresh_token_expires_in (default: 30).
+    /// </summary>
+    public int RefreshTokenCacheDurationDays { get; set; } = GuardhouseConstants.Defaults.RefreshTokenCacheDurationDays;
+
+    /// <summary>
     /// Enables automatic token refresh using refresh tokens when available (default: true).
     /// </summary>
     public bool EnableTokenRefresh { get; set; } = true;
