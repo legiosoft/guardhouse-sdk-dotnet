@@ -27,9 +27,6 @@ public class GuardhouseIntrospectionService(
     IOptions<GuardhouseResourceOptions> options,
     ILogger<GuardhouseIntrospectionService>? logger = null) : IGuardhouseIntrospectionService
 {
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly IMemoryCache _memoryCache = memoryCache;
-    private readonly IOptions<GuardhouseResourceOptions> _options = options;
     private readonly ILogger<GuardhouseIntrospectionService> _logger = logger ?? NullLogger<GuardhouseIntrospectionService>.Instance;
 
     private const string IntrospectionCacheKeyPrefix = "guardhouse_introspection_";
@@ -45,7 +42,7 @@ public class GuardhouseIntrospectionService(
     {
         ArgumentNullException.ThrowIfNull(token);
 
-        var resourceOptions = _options.Value;
+        var resourceOptions = options.Value;
 
         if (string.IsNullOrEmpty(resourceOptions.IntrospectionClientId) ||
             string.IsNullOrEmpty(resourceOptions.IntrospectionClientSecret))
@@ -56,9 +53,9 @@ public class GuardhouseIntrospectionService(
         }
 
         var cacheKey = $"{IntrospectionCacheKeyPrefix}{GetTokenHash(token)}";
-        if (_memoryCache.TryGetValue(cacheKey, out IntrospectionResponse? cachedResult) && cachedResult != null)
+        if (memoryCache.TryGetValue(cacheKey, out IntrospectionResponse? cachedResult) && cachedResult != null)
         {
-            _logger.LogDebugIf(_options.Value.EnableDebug, "Using cached introspection result");
+            _logger.LogDebugIf(options.Value.EnableDebug, "Using cached introspection result");
             return cachedResult;
         }
 
@@ -91,12 +88,12 @@ public class GuardhouseIntrospectionService(
 
         request.Content = new FormUrlEncodedContent(formData);
 
-        _logger.LogDebugIf(_options.Value.EnableDebug, "Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
+        _logger.LogDebugIf(options.Value.EnableDebug, "Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
 
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, combinedCts.Token);
+            response = await httpClient.SendAsync(request, combinedCts.Token);
         }
         catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
         {
@@ -134,15 +131,15 @@ public class GuardhouseIntrospectionService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
 
-        _logger.LogDebugIf(_options.Value.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
+        _logger.LogDebugIf(options.Value.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
 
         if (introspectionResponse.Active)
         {
             var cacheTtl = TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds);
             if (cacheTtl > TimeSpan.Zero)
             {
-                _memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
-                _logger.LogDebugIf(_options.Value.EnableDebug, "Cached introspection result for {CacheTtl}", cacheTtl);
+                memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
+                _logger.LogDebugIf(options.Value.EnableDebug, "Cached introspection result for {CacheTtl}", cacheTtl);
             }
         }
 

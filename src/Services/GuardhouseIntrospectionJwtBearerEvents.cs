@@ -24,8 +24,6 @@ public class GuardhouseIntrospectionJwtBearerEvents(
     IGuardhouseIntrospectionService introspectionService,
     ILogger<GuardhouseIntrospectionJwtBearerEvents>? logger = null) : JwtBearerEvents
 {
-    private readonly IOptions<GuardhouseResourceOptions> _options = options;
-    private readonly IGuardhouseIntrospectionService _introspectionService = introspectionService;
     private readonly ILogger<GuardhouseIntrospectionJwtBearerEvents> _logger = logger ?? NullLogger<GuardhouseIntrospectionJwtBearerEvents>.Instance;
 
     /// <summary>
@@ -44,7 +42,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         IntrospectionResponse introspectionResult;
         try
         {
-            introspectionResult = await _introspectionService.IntrospectTokenAsync(
+            introspectionResult = await introspectionService.IntrospectTokenAsync(
                 token,
                 context.HttpContext.RequestAborted);
         }
@@ -124,8 +122,6 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
     private bool TryGetAccessToken(TokenValidatedContext context, out string token)
     {
-        token = string.Empty;
-
         if (context.SecurityToken is JwtSecurityToken jwtToken && !string.IsNullOrEmpty(jwtToken.RawData))
         {
             token = jwtToken.RawData;
@@ -156,7 +152,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return false;
         }
 
-        token = headerValue.Substring(GuardhouseConstants.Headers.BearerPrefix.Length).Trim();
+        token = headerValue[GuardhouseConstants.Headers.BearerPrefix.Length..].Trim();
         return !string.IsNullOrEmpty(token);
     }
 
@@ -167,7 +163,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return true;
         }
 
-        var allowedTokenTypes = _options.Value.IntrospectionTokenTypes;
+        var allowedTokenTypes = options.Value.IntrospectionTokenTypes;
         if (allowedTokenTypes == null || allowedTokenTypes.Length == 0)
         {
             return true;
@@ -216,8 +212,8 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return validationParameters.ValidAlgorithms;
         }
 
-        var configuredAlgorithms = _options.Value.ValidAlgorithms;
-        return configuredAlgorithms != null && configuredAlgorithms.Length > 0
+        var configuredAlgorithms = options.Value.ValidAlgorithms;
+        return configuredAlgorithms.Length > 0
             ? configuredAlgorithms
             : validationParameters.ValidAlgorithms;
     }
@@ -307,7 +303,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
     private static IEnumerable<string> SplitAudiences(string audiences)
     {
-        return audiences.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries)
+        return audiences.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
             .Select(audience => audience.Trim())
             .Where(audience => !string.IsNullOrWhiteSpace(audience));
     }
@@ -370,7 +366,10 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         return secondDot > firstDot + 1 && secondDot < token.Length - 1;
     }
 
-    private static string NormalizeIssuer(string issuer) => issuer.TrimEnd('/');
+    private static string NormalizeIssuer(string issuer)
+    {
+        return issuer.TrimEnd('/');
+    }
 
     private static List<Claim> BuildClaimsFromIntrospection(IntrospectionResponse introspectionResult,
         string nameClaimType, string roleClaimType)
@@ -389,7 +388,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             claims.Add(new Claim(nameClaimType, introspectionResult.Username));
         }
 
-        if (introspectionResult.Role != null && introspectionResult.Role.Length > 0)
+        if (introspectionResult.Role is { Length: > 0 })
         {
             foreach (var role in introspectionResult.Role)
             {

@@ -3,6 +3,7 @@ namespace Guardhouse.SDK.Services;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Xml;
 using Constants;
 using Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -19,11 +20,12 @@ internal class ConfigureGuardhouseJwtOptions(
 {
     private const string GuardhouseSchemeName = GuardhouseConstants.Authentication.DefaultScheme;
 
-    private readonly IOptions<GuardhouseResourceOptions> _resourceOptions = resourceOptions;
-    private readonly ILoggerFactory _loggerFactory = loggerFactory;
     private readonly ILogger _logger = loggerFactory.CreateLogger<ConfigureGuardhouseJwtOptions>();
 
-    public void Configure(JwtBearerOptions options) => Configure(null, options);
+    public void Configure(JwtBearerOptions options)
+    {
+        Configure(null, options);
+    }
 
     public void Configure(string? name, JwtBearerOptions options)
     {
@@ -32,7 +34,7 @@ internal class ConfigureGuardhouseJwtOptions(
             return;
         }
 
-        var opts = _resourceOptions.Value;
+        var opts = resourceOptions.Value;
         var authorityUri = EnsureAuthority(opts.Authority, opts.RequireHttps);
         var authority = NormalizeAuthority(authorityUri.ToString());
 
@@ -63,8 +65,14 @@ internal class ConfigureGuardhouseJwtOptions(
         {
             options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
 
+#if NET8_0_OR_GREATER
+            options.UseSecurityTokenValidators = false;
+            options.TokenHandlers.Clear();
+            options.TokenHandlers.Add(new GuardhouseOpaqueTokenValidator());
+#else
             options.SecurityTokenValidators.Clear();
             options.SecurityTokenValidators.Add(new GuardhouseOpaqueTokenValidator());
+#endif
         }
         else
         {
@@ -83,7 +91,7 @@ internal class ConfigureGuardhouseJwtOptions(
         var allowedHosts = BuildAllowedHosts(authorityUri, opts.JwksAllowedHosts);
         var jwksHandler = new GuardhouseJwksHttpHandler(
             innerHandler,
-            _loggerFactory.CreateLogger<GuardhouseJwksHttpHandler>(),
+            loggerFactory.CreateLogger<GuardhouseJwksHttpHandler>(),
             maxRetryAttempts,
             allowedHosts,
             opts.RequireHttps);
@@ -91,7 +99,7 @@ internal class ConfigureGuardhouseJwtOptions(
         options.BackchannelHttpHandler = jwksHandler;
 
         _logger.LogDebugIf(opts.EnableDebug, "BackchannelHttpHandler set to: {HandlerType}", jwksHandler.GetType().Name);
-        _logger.LogDebugIf(opts.EnableDebug, "Expected JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
+        _logger.LogDebugIf(opts.EnableDebug, "Expected JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority ?? string.Empty));
     }
 
     private static TokenValidationParameters BuildTokenValidationParameters(GuardhouseResourceOptions opts, string authority)
@@ -154,8 +162,8 @@ internal class ConfigureGuardhouseJwtOptions(
             "JWT kid={Kid} not found in JWKS from {Authority}. Token issuer={Issuer}, alg={Alg}",
             token.Header.Kid, options.Authority, token.Issuer, token.Header.Alg);
 
-        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug, "JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
-        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug, "Ensure JWKS contains kid EXACTLY (case-sensitive): {Kid}", token.Header.Kid);
+        _logger.LogDebugIf(resourceOptions.Value.EnableDebug, "JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority ?? string.Empty));
+        _logger.LogDebugIf(resourceOptions.Value.EnableDebug, "Ensure JWKS contains kid EXACTLY (case-sensitive): {Kid}", token.Header.Kid);
     }
 
     private void LogTokenValidated(TokenValidatedContext context)
@@ -166,7 +174,7 @@ internal class ConfigureGuardhouseJwtOptions(
             return;
         }
 
-        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug,
+        _logger.LogDebugIf(resourceOptions.Value.EnableDebug,
             "JWT validated successfully. kid={Kid}, iss={Issuer}, alg={Alg}, exp={Exp}",
             token.Header.Kid, token.Issuer, token.Header.Alg, token.ValidTo);
     }
@@ -219,7 +227,7 @@ internal class ConfigureGuardhouseJwtOptions(
             return false;
         }
 
-        token = headerValue.Substring(GuardhouseConstants.Headers.BearerPrefix.Length).Trim();
+        token = headerValue[GuardhouseConstants.Headers.BearerPrefix.Length..].Trim();
         return !string.IsNullOrEmpty(token);
     }
 
@@ -290,7 +298,7 @@ internal class ConfigureGuardhouseJwtOptions(
     {
         if (tokenTypes == null || tokenTypes.Length == 0)
         {
-            return new[] { GuardhouseConstants.TokenTypes.AtJwt };
+            return [GuardhouseConstants.TokenTypes.AtJwt];
         }
 
         var normalized = new HashSet<string>(StringComparer.Ordinal);
@@ -298,7 +306,7 @@ internal class ConfigureGuardhouseJwtOptions(
 
         foreach (var tokenType in tokenTypes)
         {
-            var trimmed = tokenType?.Trim();
+            var trimmed = tokenType.Trim();
             if (string.IsNullOrEmpty(trimmed))
             {
                 continue;
@@ -318,7 +326,7 @@ internal class ConfigureGuardhouseJwtOptions(
             normalized.Add(GuardhouseConstants.TokenTypes.AtJwt);
         }
 
-        return normalized.Count > 0 ? normalized.ToArray() : new[] { GuardhouseConstants.TokenTypes.AtJwt };
+        return normalized.Count > 0 ? normalized.ToArray() : [GuardhouseConstants.TokenTypes.AtJwt];
     }
 
     private static string[]? NormalizeList(string[]? values)
@@ -337,37 +345,78 @@ internal class ConfigureGuardhouseJwtOptions(
             }
         }
 
-        return normalized.Count > 0 ? normalized.ToArray() : Array.Empty<string>();
+        return normalized.Count > 0 ? normalized.ToArray() : [];
     }
 }
 
-internal sealed class GuardhouseOpaqueTokenValidator : ISecurityTokenValidator
+internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
 {
-    public bool CanValidateToken => true;
+    public override bool CanValidateToken => true;
 
-    public int MaximumTokenSizeInBytes
+    public override bool CanWriteToken => false;
+
+    public override Type TokenType => typeof(GuardhouseOpaqueSecurityToken);
+
+    public override bool CanReadToken(string tokenString)
     {
-        get => TokenValidationParameters.DefaultMaximumTokenSizeInBytes;
-        set { }
+        return !string.IsNullOrWhiteSpace(tokenString);
     }
 
-    public bool CanReadToken(string tokenString) => !string.IsNullOrWhiteSpace(tokenString);
+    public override SecurityToken ReadToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ArgumentException("Token is null or empty.", nameof(token));
+        }
 
-    public ClaimsPrincipal ValidateToken(string tokenString, TokenValidationParameters validationParameters,
+        return new GuardhouseOpaqueSecurityToken(token);
+    }
+
+    public override ClaimsPrincipal ValidateToken(
+        string tokenString,
+        TokenValidationParameters validationParameters,
         out SecurityToken validatedToken)
     {
         validatedToken = new GuardhouseOpaqueSecurityToken(tokenString);
         return new ClaimsPrincipal(new ClaimsIdentity());
     }
+
+    public override Task<TokenValidationResult> ValidateTokenAsync(string token, TokenValidationParameters validationParameters)
+    {
+        if (!CanReadToken(token))
+        {
+            return Task.FromResult(new TokenValidationResult
+            {
+                IsValid = false,
+                Exception = new SecurityTokenException("Token is null or empty.")
+            });
+        }
+
+        var validatedToken = new GuardhouseOpaqueSecurityToken(token);
+        return Task.FromResult(new TokenValidationResult
+        {
+            IsValid = true,
+            SecurityToken = validatedToken,
+            ClaimsIdentity = new ClaimsIdentity()
+        });
+    }
+
+    public override SecurityToken ReadToken(XmlReader reader, TokenValidationParameters validationParameters)
+    {
+        throw new NotSupportedException("XML token reading is not supported.");
+    }
+
+    public override void WriteToken(XmlWriter writer, SecurityToken token)
+    {
+        throw new NotSupportedException("Token serialization is not supported.");
+    }
 }
 
 internal sealed class GuardhouseOpaqueSecurityToken(string token) : SecurityToken
 {
-    private readonly string _id = Guid.NewGuid().ToString();
-
     public string Token { get; } = token;
 
-    public override string Id => _id;
+    public override string Id { get; } = Guid.NewGuid().ToString();
 
     public override string Issuer => string.Empty;
 
