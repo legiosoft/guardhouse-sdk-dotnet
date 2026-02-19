@@ -3,7 +3,7 @@ namespace Guardhouse.SDK.Services;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Constants;
@@ -49,7 +49,7 @@ internal class GuardhouseJwksHttpHandler(
 
             logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Backchannel response: {StatusCode} from {Url}", (int)response.StatusCode, requestUrl);
 
-            if (isWellKnownRequest && response.IsSuccessStatusCode)
+            if (isWellKnownRequest && response.IsSuccessStatusCode && logger.IsEnabled(LogLevel.Debug))
             {
                 await LogWellKnownResponseAsync(response, cancellationToken);
             }
@@ -81,41 +81,111 @@ internal class GuardhouseJwksHttpHandler(
 
     private async Task LogWellKnownResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Well-known response length: {Length} chars", content.Length);
+        var contentBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        logger.LogDebug("Well-known response length: {Length} bytes", contentBytes.Length);
 
-        var jwksUri = TryExtractJwksUri(content);
-        if (!string.IsNullOrEmpty(jwksUri))
+        try
         {
-            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "OpenID config points to JWKS URI: {JwksUri}", jwksUri);
-            return;
+            using var document = JsonDocument.Parse(contentBytes);
+            var root = document.RootElement;
+
+            var jwksUri = TryExtractJwksUri(root);
+            if (!string.IsNullOrEmpty(jwksUri))
+            {
+                logger.LogDebug("OpenID config points to JWKS URI: {JwksUri}", jwksUri);
+                return;
+            }
+
+            var kids = new List<string>(MaxKidLogCount);
+            var kidCount = ExtractKids(root, kids);
+            if (kidCount == 0)
+            {
+                logger.LogWarning("JWKS response contains no kids");
+                return;
+            }
+
+            logger.LogDebug("JWKS contains {KidCount} keys", kidCount);
+            if (kids.Count > 0)
+            {
+                logger.LogDebug("JWKS kids (first {Count}): {Kids}", kids.Count, string.Join(", ", kids));
+            }
         }
-
-        var kidMatches = Regex.Matches(content, "\\\"kid\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-        if (kidMatches.Count == 0)
+        catch (JsonException ex)
         {
-            logger.LogWarning("JWKS response contains no kids");
-            return;
-        }
-
-        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "JWKS contains {KidCount} keys", kidMatches.Count);
-        var kids = kidMatches.Cast<Match>()
-            .Select(match => match.Groups[1].Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct()
-            .Take(MaxKidLogCount)
-            .ToArray();
-
-        if (kids.Length > 0)
-        {
-            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "JWKS kids (first {Count}): {Kids}", kids.Length, string.Join(", ", kids));
+            logger.LogDebug(ex, "Well-known response is not valid JSON.");
         }
     }
 
-    private static string? TryExtractJwksUri(string content)
+    private static string? TryExtractJwksUri(JsonElement root)
     {
-        var match = Regex.Match(content, "\\\"jwks_uri\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-        return match.Success ? match.Groups[1].Value : null;
+        if (TryGetProperty(root, "jwks_uri", out var jwksUriElement) &&
+            jwksUriElement.ValueKind == JsonValueKind.String)
+        {
+            return jwksUriElement.GetString();
+        }
+
+        return null;
+    }
+
+    private static int ExtractKids(JsonElement root, List<string> kids)
+    {
+        if (!TryGetProperty(root, "keys", out var keysElement) ||
+            keysElement.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        var kidCount = 0;
+        var distinctKids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in keysElement.EnumerateArray())
+        {
+            if (key.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (TryGetProperty(key, "kid", out var kidElement) &&
+                kidElement.ValueKind == JsonValueKind.String)
+            {
+                var kid = kidElement.GetString();
+                if (!string.IsNullOrWhiteSpace(kid))
+                {
+                    kidCount++;
+                    if (distinctKids.Add(kid) && kids.Count < MaxKidLogCount)
+                    {
+                        kids.Add(kid);
+                    }
+                }
+            }
+        }
+
+        return kidCount;
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            value = default;
+            return false;
+        }
+
+        if (element.TryGetProperty(name, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
     }
 
     private static IAsyncPolicy<HttpResponseMessage> BuildRetryPolicy(
@@ -132,12 +202,53 @@ internal class GuardhouseJwksHttpHandler(
             .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode && ((int)r.StatusCode >= 500 || (int)r.StatusCode == 429))
             .WaitAndRetryAsync(
                 maxRetryAttempts,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)),
-                (result, timeSpan, retryCount, _) =>
+                (int retryAttempt, DelegateResult<HttpResponseMessage> result, Context _) =>
+                    GetRetryDelay(result, retryAttempt),
+                (DelegateResult<HttpResponseMessage> result, TimeSpan timeSpan, int retryCount, Context _) =>
                 {
                     logger.LogWarning(
                         "JWKS request failed, retrying in {Delay}s. Attempt {Attempt}/{MaxAttempts}. Status: {StatusCode}",
                         timeSpan.TotalSeconds, retryCount, maxRetryAttempts, result.Result?.StatusCode);
+                    return Task.CompletedTask;
                 });
+    }
+
+    private static TimeSpan GetRetryDelay(DelegateResult<HttpResponseMessage> result, int retryAttempt)
+    {
+        if (result.Result?.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            var retryAfter = TryGetRetryAfterDelay(result.Result);
+            if (retryAfter.HasValue)
+            {
+                return retryAfter.Value;
+            }
+        }
+
+        return TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1));
+    }
+
+    private static TimeSpan? TryGetRetryAfterDelay(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter == null)
+        {
+            return null;
+        }
+
+        if (retryAfter.Delta.HasValue && retryAfter.Delta.Value > TimeSpan.Zero)
+        {
+            return retryAfter.Delta.Value;
+        }
+
+        if (retryAfter.Date.HasValue)
+        {
+            var delay = retryAfter.Date.Value - DateTimeOffset.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                return delay;
+            }
+        }
+
+        return null;
     }
 }
