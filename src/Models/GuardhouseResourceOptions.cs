@@ -92,6 +92,12 @@ public class GuardhouseResourceOptions
     public int IntrospectionCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionCacheTtlSeconds;
 
     /// <summary>
+    /// The time-to-live in seconds for inactive introspection responses (default: 10).
+    /// This prevents repeated calls for revoked or invalid tokens under heavy load.
+    /// </summary>
+    public int IntrospectionNegativeCacheTtlSeconds { get; set; } = GuardhouseConstants.Defaults.IntrospectionNegativeCacheTtlSeconds;
+
+    /// <summary>
     /// The timeout in seconds for HTTP requests to the identity server (default: 30).
     /// </summary>
     public int RequestTimeoutSeconds { get; set; } = GuardhouseConstants.Defaults.RequestTimeoutSeconds;
