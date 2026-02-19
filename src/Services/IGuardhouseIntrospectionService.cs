@@ -24,5 +24,6 @@ public interface IGuardhouseIntrospectionService
     /// <param name="token">The token to check.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>True if the token is active, false otherwise.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when introspection fails.</exception>
     Task<bool> IsTokenActiveAsync(string token, CancellationToken cancellationToken = default);
 }
