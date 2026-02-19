@@ -62,6 +62,8 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return;
         }
 
+        var tokenLooksLikeJwt = LooksLikeJwt(token);
+
         if (!IsTokenTypeAllowed(introspectionResult.TokenType))
         {
             _logger.LogWarning("Token rejected: introspection returned type '{TokenType}' which is not allowed", introspectionResult.TokenType);
@@ -69,12 +71,15 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return;
         }
 
-        var validAlgorithms = GetValidAlgorithms(context.Options.TokenValidationParameters);
-        if (!IsAlgorithmAllowed(introspectionResult.Algorithm, validAlgorithms))
+        if (tokenLooksLikeJwt || !string.IsNullOrWhiteSpace(introspectionResult.Algorithm))
         {
-            _logger.LogWarning("Token rejected: introspection returned algorithm '{Algorithm}' which is not allowed", introspectionResult.Algorithm);
-            context.Fail($"Algorithm '{introspectionResult.Algorithm}' is not allowed");
-            return;
+            var validAlgorithms = GetValidAlgorithms(context.Options.TokenValidationParameters);
+            if (!IsAlgorithmAllowed(introspectionResult.Algorithm, validAlgorithms))
+            {
+                _logger.LogWarning("Token rejected: introspection returned algorithm '{Algorithm}' which is not allowed", introspectionResult.Algorithm);
+                context.Fail($"Algorithm '{introspectionResult.Algorithm}' is not allowed");
+                return;
+            }
         }
 
         var validationParameters = context.Options.TokenValidationParameters;
@@ -94,7 +99,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (validationParameters.ValidateLifetime)
         {
-            var lifetimeError = ValidateLifetime(introspectionResult, validationParameters.ClockSkew);
+            var lifetimeError = ValidateLifetime(introspectionResult, validationParameters.ClockSkew, tokenLooksLikeJwt);
             if (lifetimeError != null)
             {
                 _logger.LogWarning("Token rejected: {Reason}", lifetimeError);
@@ -162,7 +167,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return true;
         }
 
-        var allowedTokenTypes = _options.Value.TokenTypes;
+        var allowedTokenTypes = _options.Value.IntrospectionTokenTypes;
         if (allowedTokenTypes == null || allowedTokenTypes.Length == 0)
         {
             return true;
@@ -175,7 +180,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
     {
         if (string.IsNullOrWhiteSpace(algorithm))
         {
-            return true;
+            return false;
         }
 
         if (string.Equals(algorithm, GuardhouseConstants.Algorithms.None, StringComparison.OrdinalIgnoreCase))
@@ -185,10 +190,9 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (validAlgorithms == null)
         {
-            return true;
+            return false;
         }
 
-        var hasAny = false;
         foreach (var validAlgorithm in validAlgorithms)
         {
             if (string.IsNullOrWhiteSpace(validAlgorithm))
@@ -196,14 +200,13 @@ public class GuardhouseIntrospectionJwtBearerEvents(
                 continue;
             }
 
-            hasAny = true;
             if (string.Equals(validAlgorithm, algorithm, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
-        return !hasAny;
+        return false;
     }
 
     private IEnumerable<string>? GetValidAlgorithms(TokenValidationParameters validationParameters)
@@ -309,7 +312,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             .Where(audience => !string.IsNullOrWhiteSpace(audience));
     }
 
-    private static string? ValidateLifetime(IntrospectionResponse introspectionResult, TimeSpan clockSkew)
+    private static string? ValidateLifetime(IntrospectionResponse introspectionResult, TimeSpan clockSkew, bool requireExp)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -329,23 +332,42 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             }
         }
 
-        if (introspectionResult.Exp.HasValue)
+        if (!introspectionResult.Exp.HasValue)
         {
-            try
+            return requireExp ? "Token missing exp claim" : null;
+        }
+
+        try
+        {
+            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(introspectionResult.Exp.Value);
+            if (expiresAt + clockSkew <= now)
             {
-                var expiresAt = DateTimeOffset.FromUnixTimeSeconds(introspectionResult.Exp.Value);
-                if (expiresAt + clockSkew <= now)
-                {
-                    return "Token has expired";
-                }
+                return "Token has expired";
             }
-            catch (ArgumentOutOfRangeException)
-            {
-                return "Token expiration value is invalid";
-            }
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return "Token expiration value is invalid";
         }
 
         return null;
+    }
+
+    private static bool LooksLikeJwt(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        var firstDot = token.IndexOf('.');
+        if (firstDot <= 0)
+        {
+            return false;
+        }
+
+        var secondDot = token.IndexOf('.', firstDot + 1);
+        return secondDot > firstDot + 1 && secondDot < token.Length - 1;
     }
 
     private static string NormalizeIssuer(string issuer) => issuer.TrimEnd('/');

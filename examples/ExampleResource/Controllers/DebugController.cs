@@ -1,5 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
+using Guardhouse.SDK.Extensions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -39,11 +41,11 @@ public class DebugController : ControllerBase
         var authHeader = Request.Headers.Authorization.ToString();
         var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
         
-        _logger.LogInformation("Auth Header Debug:");
-        _logger.LogInformation("  AuthHeader: {AuthHeader}", 
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "Auth Header Debug:");
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  AuthHeader: {AuthHeader}",
             string.IsNullOrEmpty(authHeader) ? "NULL" : authHeader);
-        _logger.LogInformation("  IsAuthenticated: {IsAuthenticated}", isAuthenticated);
-        _logger.LogInformation("  User.Identity: {Identity}", User.Identity?.Name ?? "NULL");
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  IsAuthenticated: {IsAuthenticated}", isAuthenticated);
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  User.Identity: {Identity}", User.Identity?.Name ?? "NULL");
         
         return Ok(new
         {
@@ -74,13 +76,13 @@ public class DebugController : ControllerBase
                 Value = c.Value
             }).ToList();
 
-            _logger.LogInformation("Decoded Token:");
-            _logger.LogInformation("  Issuer: {Issuer}", jwtToken.Issuer);
-            _logger.LogInformation("  Issuer (trimmed): {Issuer}", jwtToken.Issuer?.TrimEnd('/'));
-            _logger.LogInformation("  Audience: {Audience}", jwtToken.Audiences.FirstOrDefault());
-            _logger.LogInformation("  ValidFrom: {ValidFrom}", jwtToken.ValidFrom);
-            _logger.LogInformation("  ValidTo: {ValidTo}", jwtToken.ValidTo);
-            _logger.LogInformation("  Algorithm: {Algorithm}", jwtToken.Header.Alg);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "Decoded Token:");
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  Issuer: {Issuer}", jwtToken.Issuer);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  Issuer (trimmed): {Issuer}", jwtToken.Issuer?.TrimEnd('/'));
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  Audience: {Audience}", jwtToken.Audiences.FirstOrDefault());
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  ValidFrom: {ValidFrom}", jwtToken.ValidFrom);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  ValidTo: {ValidTo}", jwtToken.ValidTo);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  Algorithm: {Algorithm}", jwtToken.Header.Alg);
 
             return Ok(new
             {
@@ -118,9 +120,9 @@ public class DebugController : ControllerBase
     {
         var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
         
-        _logger.LogInformation("User Claims Debug:");
-        _logger.LogInformation("  IsAuthenticated: {IsAuthenticated}", isAuthenticated);
-        _logger.LogInformation("  AuthenticationType: {AuthType}", User.Identity?.AuthenticationType);
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "User Claims Debug:");
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  IsAuthenticated: {IsAuthenticated}", isAuthenticated);
+        _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  AuthenticationType: {AuthType}", User.Identity?.AuthenticationType);
 
         var claims = User.Claims.Select(c => new
         {
@@ -155,11 +157,11 @@ public class DebugController : ControllerBase
             var isExpired = now > jwtToken.ValidTo;
             var timeUntilExpiry = jwtToken.ValidTo - now;
 
-            _logger.LogInformation("Token Expiry Check:");
-            _logger.LogInformation("  Now: {Now}", now);
-            _logger.LogInformation("  ValidTo: {ValidTo}", jwtToken.ValidTo);
-            _logger.LogInformation("  IsExpired: {IsExpired}", isExpired);
-            _logger.LogInformation("  TimeUntilExpiry: {TimeUntilExpiry}", timeUntilExpiry);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "Token Expiry Check:");
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  Now: {Now}", now);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  ValidTo: {ValidTo}", jwtToken.ValidTo);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  IsExpired: {IsExpired}", isExpired);
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "  TimeUntilExpiry: {TimeUntilExpiry}", timeUntilExpiry);
 
             return Ok(new
             {

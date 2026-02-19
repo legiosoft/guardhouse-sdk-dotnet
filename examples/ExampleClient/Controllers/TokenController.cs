@@ -1,6 +1,8 @@
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace ExampleClient.Controllers;
@@ -11,11 +13,13 @@ public class TokenController : ControllerBase
 {
     private readonly IGuardhouseTokenService _tokenService;
     private readonly ILogger<TokenController> _logger;
+    private readonly IWebHostEnvironment _environment;
 
-    public TokenController(IGuardhouseTokenService tokenService, ILogger<TokenController> logger)
+    public TokenController(IGuardhouseTokenService tokenService, ILogger<TokenController> logger, IWebHostEnvironment environment)
     {
         _tokenService = tokenService;
         _logger = logger;
+        _environment = environment;
     }
 
     private string? GetScopeFromToken(string token)
@@ -50,7 +54,6 @@ public class TokenController : ControllerBase
 
             return Ok(new
             {
-                AccessToken = tokenResponse.AccessToken,
                 TokenType = tokenResponse.TokenType,
                 ExpiresIn = tokenResponse.ExpiresIn,
                 Scope = scopeFromToken ?? tokenResponse.Scope,
@@ -101,6 +104,11 @@ public class TokenController : ControllerBase
     [HttpPost("introspect")]
     public async Task<ActionResult> IntrospectToken([FromBody] IntrospectTokenRequest request)
     {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
         try
         {
             var introspectionResult = await _tokenService.IntrospectTokenAsync(request.Token);
@@ -130,6 +138,11 @@ public class TokenController : ControllerBase
     [HttpGet("check-active")]
     public async Task<ActionResult> CheckTokenActive([FromQuery] string token)
     {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
         try
         {
             var isActive = await _tokenService.IsTokenActiveAsync(token);

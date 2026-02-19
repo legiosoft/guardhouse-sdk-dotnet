@@ -60,6 +60,16 @@ public class GuardhouseResourceOptions
     public bool? RequireHttpsMetadata { get; set; }
 
     /// <summary>
+    /// Whether HTTPS is required for authority, JWKS, and introspection endpoints (default: true).
+    /// </summary>
+    public bool RequireHttps { get; set; } = true;
+
+    /// <summary>
+    /// Whether to save the bearer token in the authentication ticket (default: false).
+    /// </summary>
+    public bool SaveToken { get; set; }
+
+    /// <summary>
     /// How long to cache the JWKS (JSON Web Key Set) in hours (default: 24).
     /// </summary>
     public int JwksCacheDurationHours { get; set; } = GuardhouseConstants.Defaults.JwksCacheDurationHours;
@@ -68,6 +78,12 @@ public class GuardhouseResourceOptions
     /// How often to refresh the JWKS cache in minutes (default: 5).
     /// </summary>
     public int JwksRefreshIntervalMinutes { get; set; } = GuardhouseConstants.Defaults.JwksRefreshIntervalMinutes;
+
+    /// <summary>
+    /// Optional allowlist of hosts for JWKS and discovery requests.
+    /// If set, requests must match these hosts or the authority host.
+    /// </summary>
+    public string[]? JwksAllowedHosts { get; set; }
 
     /// <summary>
     /// The time-to-live for introspection cache entries in seconds (default: 5).
@@ -98,9 +114,14 @@ public class GuardhouseResourceOptions
     public string[] ValidAlgorithms { get; set; } = [GuardhouseConstants.Algorithms.RS256];
 
     /// <summary>
-    /// The list of valid token types (default: ["JWT"]).
+    /// The list of valid token types (default: ["at+jwt"]).
     /// </summary>
-    public string[] TokenTypes { get; set; } = [GuardhouseConstants.TokenTypes.Jwt];
+    public string[] TokenTypes { get; set; } = [GuardhouseConstants.TokenTypes.AtJwt];
+
+    /// <summary>
+    /// Allowed token_type values from introspection responses. If null or empty, token_type is not enforced.
+    /// </summary>
+    public string[]? IntrospectionTokenTypes { get; set; }
 
     /// <summary>
     /// Enables debug logging including console output and debug-level logger messages (default: false).

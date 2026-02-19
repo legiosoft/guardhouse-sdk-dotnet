@@ -22,7 +22,8 @@ public class GuardhouseJwtBearerEventsTests
         _mockOptions.Setup(x => x.Value).Returns(new GuardhouseResourceOptions
         {
             ValidAlgorithms = new[] { "RS256" },
-            TokenTypes = new[] { "JWT" }
+            TokenTypes = new[] { GuardhouseConstants.TokenTypes.AtJwt },
+            IntrospectionTokenTypes = new[] { "JWT" }
         });
         _events = new GuardhouseIntrospectionJwtBearerEvents(_mockOptions.Object, _mockIntrospectionService.Object);
     }
@@ -141,7 +142,7 @@ public class GuardhouseJwtBearerEventsTests
 
         _mockIntrospectionService
             .Setup(x => x.IntrospectTokenAsync(token, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new IntrospectionResponse { Active = true });
+            .ReturnsAsync(new IntrospectionResponse { Active = true, Algorithm = "RS256" });
 
         await _events.TokenValidated(context);
 

@@ -15,6 +15,11 @@ public class GuardhouseClientOptions
     public string Authority { get; set; } = string.Empty;
 
     /// <summary>
+    /// Whether HTTPS is required for authority, token, and introspection endpoints (default: true).
+    /// </summary>
+    public bool RequireHttps { get; set; } = true;
+
+    /// <summary>
     /// The client ID assigned to your application by the identity server.
     /// </summary>
     [Required]
@@ -85,5 +90,6 @@ public class GuardhouseClientOptions
     /// How to send client credentials to the introspection endpoint (default: BasicAuth).
     /// Use FormData if your identity server does not support Basic Authentication.
     /// </summary>
-    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; } = IntrospectionCredentialTransmission.BasicAuth;
+    public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; }
+        = IntrospectionCredentialTransmission.BasicAuth;
 }

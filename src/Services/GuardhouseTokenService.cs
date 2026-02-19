@@ -123,9 +123,10 @@ public class GuardhouseTokenService(
     public async Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken = default)
     {
         var options1 = options.Value;
-        var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
+        var authorityUri = EnsureAuthorityUri(options1.Authority, options1.RequireHttps);
+        var tokenEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectToken).ToString();
 
-        logger.LogInformation("Requesting new token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
+        logger.LogDebugIf(options1.EnableDebug, "Requesting new token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -180,7 +181,7 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        logger.LogInformation("Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogDebugIf(options1.EnableDebug, "Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse.WithClock(_clock);
     }
@@ -194,9 +195,10 @@ public class GuardhouseTokenService(
     public async Task<TokenResponse> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
         var options1 = options.Value;
-        var tokenEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectToken}";
+        var authorityUri = EnsureAuthorityUri(options1.Authority, options1.RequireHttps);
+        var tokenEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectToken).ToString();
 
-        logger.LogInformation("Refreshing token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
+        logger.LogDebugIf(options1.EnableDebug, "Refreshing token from {TokenEndpoint} for client {ClientId}", tokenEndpoint, options1.ClientId);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -248,7 +250,7 @@ public class GuardhouseTokenService(
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to deserialize token response");
 
-        logger.LogInformation("Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
+        logger.LogDebugIf(options1.EnableDebug, "Successfully refreshed token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse.WithClock(_clock);
     }
@@ -263,7 +265,8 @@ public class GuardhouseTokenService(
     public async Task<IntrospectionResponse> IntrospectTokenAsync(string token, CancellationToken cancellationToken = default)
     {
         var options1 = options.Value;
-        var introspectionEndpoint = $"{options1.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
+        var authorityUri = EnsureAuthorityUri(options1.Authority, options1.RequireHttps);
+        var introspectionEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectIntrospect).ToString();
 
         logger.LogDebugIf(options1.EnableDebug, "Introspecting token from {IntrospectionEndpoint}", introspectionEndpoint);
 
@@ -415,5 +418,20 @@ public class GuardhouseTokenService(
         }
 
         return $"Response: {responseContent}";
+    }
+
+    private static Uri EnsureAuthorityUri(string authority, bool requireHttps)
+    {
+        if (!Uri.TryCreate(authority, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException("Authority must be an absolute URI.");
+        }
+
+        if (requireHttps && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("HTTPS is required for token and introspection endpoints.");
+        }
+
+        return uri;
     }
 }

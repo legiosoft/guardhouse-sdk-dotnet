@@ -4,6 +4,7 @@ using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Constants;
+using Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -32,24 +33,25 @@ internal class ConfigureGuardhouseJwtOptions(
         }
 
         var opts = _resourceOptions.Value;
-        var authority = NormalizeAuthority(opts.Authority);
+        var authorityUri = EnsureAuthority(opts.Authority, opts.RequireHttps);
+        var authority = NormalizeAuthority(authorityUri.ToString());
 
         options.Authority = authority;
         options.Audience = opts.Audience;
 
-        _logger.LogInformation(
+        _logger.LogDebugIf(opts.EnableDebug,
             "Configuring JWT Bearer: Authority={Authority}, Audience={Audience}, EnableIntrospection={EnableIntrospection}",
             options.Authority, options.Audience, opts.EnableIntrospection);
 
-        options.RequireHttpsMetadata = opts.RequireHttpsMetadata ?? IsHttpsAuthority(authority);
-        options.SaveToken = true;
+        options.RequireHttpsMetadata = opts.RequireHttpsMetadata ?? opts.RequireHttps;
+        options.SaveToken = opts.SaveToken;
         options.MapInboundClaims = false;
 
-        ConfigureBackchannel(options, opts);
+        ConfigureBackchannel(options, opts, authorityUri);
 
         options.TokenValidationParameters = BuildTokenValidationParameters(opts, authority);
 
-        _logger.LogInformation(
+        _logger.LogDebugIf(opts.EnableDebug,
             "TokenValidationParameters: ValidIssuer={ValidIssuer}, ValidateIssuerSigningKey={ValidateIssuerSigningKey}, ValidAlgorithms={ValidAlgorithms}",
             options.TokenValidationParameters.ValidIssuer,
             options.TokenValidationParameters.ValidateIssuerSigningKey,
@@ -74,19 +76,22 @@ internal class ConfigureGuardhouseJwtOptions(
         options.BackchannelTimeout = TimeSpan.FromSeconds(GetRequestTimeoutSeconds(opts.RequestTimeoutSeconds));
     }
 
-    private void ConfigureBackchannel(JwtBearerOptions options, GuardhouseResourceOptions opts)
+    private void ConfigureBackchannel(JwtBearerOptions options, GuardhouseResourceOptions opts, Uri authorityUri)
     {
         var maxRetryAttempts = Math.Max(opts.MaxRetryAttempts, 0);
         var innerHandler = new HttpClientHandler();
+        var allowedHosts = BuildAllowedHosts(authorityUri, opts.JwksAllowedHosts);
         var jwksHandler = new GuardhouseJwksHttpHandler(
             innerHandler,
             _loggerFactory.CreateLogger<GuardhouseJwksHttpHandler>(),
-            maxRetryAttempts);
+            maxRetryAttempts,
+            allowedHosts,
+            opts.RequireHttps);
 
         options.BackchannelHttpHandler = jwksHandler;
 
-        _logger.LogInformation("BackchannelHttpHandler set to: {HandlerType}", jwksHandler.GetType().Name);
-        _logger.LogInformation("Expected JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
+        _logger.LogDebugIf(opts.EnableDebug, "BackchannelHttpHandler set to: {HandlerType}", jwksHandler.GetType().Name);
+        _logger.LogDebugIf(opts.EnableDebug, "Expected JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
     }
 
     private static TokenValidationParameters BuildTokenValidationParameters(GuardhouseResourceOptions opts, string authority)
@@ -149,8 +154,8 @@ internal class ConfigureGuardhouseJwtOptions(
             "JWT kid={Kid} not found in JWKS from {Authority}. Token issuer={Issuer}, alg={Alg}",
             token.Header.Kid, options.Authority, token.Issuer, token.Header.Alg);
 
-        _logger.LogInformation("JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
-        _logger.LogInformation("Ensure JWKS contains kid EXACTLY (case-sensitive): {Kid}", token.Header.Kid);
+        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug, "JWKS endpoint: {JwksUrl}", BuildJwksUrl(options.Authority));
+        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug, "Ensure JWKS contains kid EXACTLY (case-sensitive): {Kid}", token.Header.Kid);
     }
 
     private void LogTokenValidated(TokenValidatedContext context)
@@ -161,7 +166,8 @@ internal class ConfigureGuardhouseJwtOptions(
             return;
         }
 
-        _logger.LogInformation("JWT validated successfully. kid={Kid}, iss={Issuer}, alg={Alg}, exp={Exp}",
+        _logger.LogDebugIf(_resourceOptions.Value.EnableDebug,
+            "JWT validated successfully. kid={Kid}, iss={Issuer}, alg={Alg}, exp={Exp}",
             token.Header.Kid, token.Issuer, token.Header.Alg, token.ValidTo);
     }
 
@@ -222,14 +228,42 @@ internal class ConfigureGuardhouseJwtOptions(
         return string.IsNullOrWhiteSpace(authority) ? string.Empty : authority.TrimEnd('/');
     }
 
-    private static bool IsHttpsAuthority(string authority)
+    private static Uri EnsureAuthority(string authority, bool requireHttps)
     {
-        if (Uri.TryCreate(authority, UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(authority, UriKind.Absolute, out var uri))
         {
-            return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+            throw new InvalidOperationException("Authority must be an absolute URI.");
         }
 
-        return true;
+        if (requireHttps && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("HTTPS is required for authority and metadata endpoints.");
+        }
+
+        return uri;
+    }
+
+    private static HashSet<string> BuildAllowedHosts(Uri authorityUri, string[]? extraHosts)
+    {
+        var allowedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            authorityUri.Host
+        };
+
+        if (extraHosts == null)
+        {
+            return allowedHosts;
+        }
+
+        foreach (var host in extraHosts)
+        {
+            if (!string.IsNullOrWhiteSpace(host))
+            {
+                allowedHosts.Add(host.Trim());
+            }
+        }
+
+        return allowedHosts;
     }
 
     private static string BuildJwksUrl(string authority)
@@ -256,7 +290,7 @@ internal class ConfigureGuardhouseJwtOptions(
     {
         if (tokenTypes == null || tokenTypes.Length == 0)
         {
-            return new[] { "at+jwt", "JWT", "jwt" };
+            return new[] { GuardhouseConstants.TokenTypes.AtJwt };
         }
 
         var normalized = new HashSet<string>(StringComparer.Ordinal);
@@ -281,10 +315,10 @@ internal class ConfigureGuardhouseJwtOptions(
 
         if (allowsJwt)
         {
-            normalized.Add("at+jwt");
+            normalized.Add(GuardhouseConstants.TokenTypes.AtJwt);
         }
 
-        return normalized.Count > 0 ? normalized.ToArray() : new[] { "at+jwt", "JWT", "jwt" };
+        return normalized.Count > 0 ? normalized.ToArray() : new[] { GuardhouseConstants.TokenTypes.AtJwt };
     }
 
     private static string[]? NormalizeList(string[]? values)

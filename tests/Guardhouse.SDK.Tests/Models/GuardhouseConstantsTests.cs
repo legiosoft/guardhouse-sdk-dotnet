@@ -49,6 +49,12 @@ public class GuardhouseConstantsTests
     }
 
     [Fact]
+    public void TokenTypes_AtJwt_ShouldBeCorrect()
+    {
+        Constants.GuardhouseConstants.TokenTypes.AtJwt.Should().Be("at+jwt");
+    }
+
+    [Fact]
     public void Headers_Authorization_ShouldBeCorrect()
     {
         Constants.GuardhouseConstants.Headers.Authorization.Should().Be("Authorization");

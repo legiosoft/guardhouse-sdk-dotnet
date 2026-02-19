@@ -54,6 +54,7 @@ public class OptionsTests
         options.ClientId.Should().Be(string.Empty);
         options.ClientSecret.Should().Be(string.Empty);
         options.Scope.Should().Be("api");
+        options.RequireHttps.Should().BeTrue();
         options.EnableTokenCaching.Should().BeTrue();
         options.EnableTokenRefresh.Should().BeTrue();
         options.CacheExpirationBufferSeconds.Should().Be(60);
@@ -208,10 +209,12 @@ public class OptionsTests
         options.ValidateLifetime.Should().BeTrue();
         options.ValidateIssuerSigningKey.Should().BeTrue();
         options.RequireHttpsMetadata.Should().BeNull();
+        options.RequireHttps.Should().BeTrue();
+        options.SaveToken.Should().BeFalse();
         options.JwksCacheDurationHours.Should().Be(24);
         options.JwksRefreshIntervalMinutes.Should().Be(5);
         options.IntrospectionCacheTtlSeconds.Should().Be(5);
         options.ValidAlgorithms.Should().Contain("RS256");
-        options.TokenTypes.Should().Contain("JWT");
+        options.TokenTypes.Should().Contain("at+jwt");
     }
 }

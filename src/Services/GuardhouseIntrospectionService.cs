@@ -62,7 +62,8 @@ public class GuardhouseIntrospectionService(
             return cachedResult;
         }
 
-        var introspectionEndpoint = $"{resourceOptions.Authority.TrimEnd('/')}/{GuardhouseConstants.Endpoints.ConnectIntrospect}";
+        var authorityUri = EnsureAuthorityUri(resourceOptions.Authority, resourceOptions.RequireHttps);
+        var introspectionEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectIntrospect).ToString();
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -199,5 +200,20 @@ public class GuardhouseIntrospectionService(
         }
 
         return $"Response: {responseContent}";
+    }
+
+    private static Uri EnsureAuthorityUri(string authority, bool requireHttps)
+    {
+        if (!Uri.TryCreate(authority, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException("Authority must be an absolute URI.");
+        }
+
+        if (requireHttps && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("HTTPS is required for introspection endpoints.");
+        }
+
+        return uri;
     }
 }

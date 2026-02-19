@@ -19,6 +19,7 @@ public static class GuardhouseConstants
 
     public static class TokenTypes
     {
+        public const string AtJwt = "at+jwt";
         public const string Jwt = "JWT";
     }
 

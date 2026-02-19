@@ -1,34 +1,45 @@
 namespace Guardhouse.SDK.Services;
 
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Constants;
+using Extensions;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Polly.Retry;
 
 internal class GuardhouseJwksHttpHandler(
     HttpMessageHandler innerHandler,
     ILogger<GuardhouseJwksHttpHandler> logger,
-    int maxRetryAttempts) : DelegatingHandler(innerHandler)
+    int maxRetryAttempts,
+    IReadOnlyCollection<string> allowedHosts,
+    bool requireHttps) : DelegatingHandler(innerHandler)
 {
     private const int MaxKidLogCount = 10;
 
-    private readonly ILogger<GuardhouseJwksHttpHandler> _logger = logger;
     private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = BuildRetryPolicy(logger, maxRetryAttempts);
+    private readonly HashSet<string> _allowedHosts = new(allowedHosts, StringComparer.OrdinalIgnoreCase);
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var requestUrl = request.RequestUri?.ToString();
-        var isWellKnownRequest = IsWellKnownRequest(request.RequestUri);
+        var requestUri = request.RequestUri ?? throw new InvalidOperationException("Backchannel request URI is missing.");
+        var requestUrl = requestUri.ToString();
+        var isWellKnownRequest = IsWellKnownRequest(requestUri);
 
-        if (_logger.IsEnabled(LogLevel.Debug))
+        if (requireHttps && !string.Equals(requestUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug("Backchannel request: {Method} {Url}", request.Method, requestUrl);
+            throw new InvalidOperationException("HTTPS is required for metadata and JWKS endpoints.");
         }
+
+        if (_allowedHosts.Count > 0 && !_allowedHosts.Contains(requestUri.Host))
+        {
+            throw new InvalidOperationException($"Backchannel host is not allowed: {requestUri.Host}");
+        }
+
+        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Backchannel request: {Method} {Url}", request.Method, requestUrl);
 
         try
         {
@@ -36,12 +47,9 @@ internal class GuardhouseJwksHttpHandler(
                 ? await _retryPolicy.ExecuteAsync(ct => base.SendAsync(request, ct), cancellationToken)
                 : await base.SendAsync(request, cancellationToken);
 
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug("Backchannel response: {StatusCode} from {Url}", (int)response.StatusCode, requestUrl);
-            }
+            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Backchannel response: {StatusCode} from {Url}", (int)response.StatusCode, requestUrl);
 
-            if (isWellKnownRequest && response.IsSuccessStatusCode && _logger.IsEnabled(LogLevel.Information))
+            if (isWellKnownRequest && response.IsSuccessStatusCode)
             {
                 await LogWellKnownResponseAsync(response, cancellationToken);
             }
@@ -52,7 +60,7 @@ internal class GuardhouseJwksHttpHandler(
         {
             if (isWellKnownRequest)
             {
-                _logger.LogError(ex, "JWKS request failed: {Url}", requestUrl);
+                logger.LogError(ex, "JWKS request failed: {Url}", requestUrl);
             }
 
             throw;
@@ -73,29 +81,24 @@ internal class GuardhouseJwksHttpHandler(
 
     private async Task LogWellKnownResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        if (response.Content == null)
-        {
-            return;
-        }
-
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogInformation("Well-known response length: {Length} chars", content.Length);
+        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Well-known response length: {Length} chars", content.Length);
 
         var jwksUri = TryExtractJwksUri(content);
         if (!string.IsNullOrEmpty(jwksUri))
         {
-            _logger.LogInformation("OpenID config points to JWKS URI: {JwksUri}", jwksUri);
+            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "OpenID config points to JWKS URI: {JwksUri}", jwksUri);
             return;
         }
 
         var kidMatches = Regex.Matches(content, "\\\"kid\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
         if (kidMatches.Count == 0)
         {
-            _logger.LogWarning("JWKS response contains no kids");
+            logger.LogWarning("JWKS response contains no kids");
             return;
         }
 
-        _logger.LogInformation("JWKS contains {KidCount} keys", kidMatches.Count);
+        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "JWKS contains {KidCount} keys", kidMatches.Count);
         var kids = kidMatches.Cast<Match>()
             .Select(match => match.Groups[1].Value)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -105,7 +108,7 @@ internal class GuardhouseJwksHttpHandler(
 
         if (kids.Length > 0)
         {
-            _logger.LogInformation("JWKS kids (first {Count}): {Kids}", kids.Length, string.Join(", ", kids));
+            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "JWKS kids (first {Count}): {Kids}", kids.Length, string.Join(", ", kids));
         }
     }
 
