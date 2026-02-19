@@ -90,7 +90,7 @@ public static class ServiceCollectionExtensions
                     }
 
                     return true;
-                }, 
+                },
                     "Guardhouse resource configuration is invalid. Ensure Authority, " +
                     "Audience are set, and when using Introspection mode, " +
                     "IntrospectionClientId and IntrospectionClientSecret are also configured.")
@@ -110,6 +110,8 @@ public static class ServiceCollectionExtensions
                 .AddPolicyHandler((sp, _) => GetRetryPolicyForResource(sp))
                 .AddPolicyHandler((sp, _) => GetTimeoutPolicyForResource(sp));
 
+            // Required for opaque token introspection - registered here so options.EventsType can resolve it
+            services.AddScoped<GuardhouseIntrospectionJwtBearerEvents>();
             services.AddScoped<IGuardhouseResourceService, GuardhouseResourceService>();
             services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
             services.AddSingleton<IConfigureNamedOptions<JwtBearerOptions>, ConfigureGuardhouseJwtOptions>();
@@ -124,7 +126,8 @@ public static class ServiceCollectionExtensions
         /// <param name="configureClientAction">Optional action to configure Guardhouse client options.</param>
         /// <param name="configureResourceAction">Optional action to configure Guardhouse resource options.</param>
         /// <returns>The service collection for method chaining.</returns>
-        public IServiceCollection AddGuardhouse(Action<GuardhouseClientOptions>? configureClientAction = null,
+        public IServiceCollection AddGuardhouse(
+            Action<GuardhouseClientOptions>? configureClientAction = null,
             Action<GuardhouseResourceOptions>? configureResourceAction = null)
         {
             services.AddGuardhouseClient(configureClientAction);
@@ -140,7 +143,8 @@ public static class ServiceCollectionExtensions
         /// <param name="clientSecret">The client secret for your application.</param>
         /// <param name="scope">The scope(s) to request (default: "api").</param>
         /// <returns>The service collection for method chaining.</returns>
-        public IServiceCollection AddGuardhouseClient(string authority,
+        public IServiceCollection AddGuardhouseClient(
+            string authority,
             string clientId,
             string clientSecret,
             string scope = GuardhouseConstants.Defaults.DefaultScope)
@@ -160,7 +164,8 @@ public static class ServiceCollectionExtensions
         /// <param name="authority">The authority URL of identity server.</param>
         /// <param name="audience">The audience that your resource server expects.</param>
         /// <returns>The service collection for method chaining.</returns>
-        public IServiceCollection AddGuardhouseResource(string authority,
+        public IServiceCollection AddGuardhouseResource(
+            string authority,
             string audience)
         {
             return services.AddGuardhouseResource(options =>
@@ -180,7 +185,7 @@ public static class ServiceCollectionExtensions
             .Handle<HttpRequestException>()
             .Or<TimeoutRejectedException>()
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            .OrResult(msg => (int)msg.StatusCode >= 500 && (int)msg.StatusCode < 600)
+            .OrResult(msg => (int)msg.StatusCode is >= 500 and < 600)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.BadGateway)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.GatewayTimeout)
@@ -210,7 +215,7 @@ public static class ServiceCollectionExtensions
             .Handle<HttpRequestException>()
             .Or<TimeoutRejectedException>()
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            .OrResult(msg => (int)msg.StatusCode >= 500 && (int)msg.StatusCode < 600)
+            .OrResult(msg => (int)msg.StatusCode is >= 500 and < 600)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.BadGateway)
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.GatewayTimeout)

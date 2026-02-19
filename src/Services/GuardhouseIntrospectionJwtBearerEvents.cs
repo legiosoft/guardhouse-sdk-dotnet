@@ -1,16 +1,19 @@
 namespace Guardhouse.SDK.Services;
 
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Constants;
-using Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Models;
 
 /// <summary>
 /// JWT bearer events handler that performs token introspection validation.
@@ -31,44 +34,19 @@ public class GuardhouseIntrospectionJwtBearerEvents(
     /// </summary>
     public override async Task TokenValidated(TokenValidatedContext context)
     {
-        var token = context.SecurityToken is JwtSecurityToken jwtToken ? jwtToken.RawData : null;
-        if (string.IsNullOrEmpty(token))
+        if (!TryGetAccessToken(context, out var token))
         {
             _logger.LogWarning("Token rejected: unable to extract raw token");
             context.Fail("Unable to extract token");
             return;
         }
 
+        IntrospectionResponse introspectionResult;
         try
         {
-            var introspectionResult = await _introspectionService.IntrospectTokenAsync(token, context.HttpContext.RequestAborted);
-
-            if (!introspectionResult.Active)
-            {
-                _logger.LogWarning("Token rejected: introspection returned active=false");
-                context.Fail("Token is not active");
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(introspectionResult.TokenType) &&
-                !_options.Value.TokenTypes.Contains(introspectionResult.TokenType))
-            {
-                _logger.LogWarning("Token rejected: introspection returned type '{TokenType}' which is not allowed", introspectionResult.TokenType);
-                context.Fail($"Token type '{introspectionResult.TokenType}' is not allowed");
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(introspectionResult.Algorithm) &&
-                !_options.Value.ValidAlgorithms.Contains(introspectionResult.Algorithm))
-            {
-                _logger.LogWarning("Token rejected: introspection returned algorithm '{Algorithm}' which is not allowed", introspectionResult.Algorithm);
-                context.Fail($"Algorithm '{introspectionResult.Algorithm}' is not allowed");
-                return;
-            }
-
-            var claims = BuildClaimsFromIntrospection(introspectionResult);
-            var identity = new ClaimsIdentity(claims, context.Scheme.Name, ClaimTypes.Name, ClaimTypes.Role);
-            context.Principal = new ClaimsPrincipal(identity);
+            introspectionResult = await _introspectionService.IntrospectTokenAsync(
+                token,
+                context.HttpContext.RequestAborted);
         }
         catch (Exception ex)
         {
@@ -77,10 +55,303 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             return;
         }
 
+        if (!introspectionResult.Active)
+        {
+            _logger.LogWarning("Token rejected: introspection returned active=false");
+            context.Fail("Token is not active");
+            return;
+        }
+
+        if (!IsTokenTypeAllowed(introspectionResult.TokenType))
+        {
+            _logger.LogWarning("Token rejected: introspection returned type '{TokenType}' which is not allowed", introspectionResult.TokenType);
+            context.Fail($"Token type '{introspectionResult.TokenType}' is not allowed");
+            return;
+        }
+
+        var validAlgorithms = GetValidAlgorithms(context.Options.TokenValidationParameters);
+        if (!IsAlgorithmAllowed(introspectionResult.Algorithm, validAlgorithms))
+        {
+            _logger.LogWarning("Token rejected: introspection returned algorithm '{Algorithm}' which is not allowed", introspectionResult.Algorithm);
+            context.Fail($"Algorithm '{introspectionResult.Algorithm}' is not allowed");
+            return;
+        }
+
+        var validationParameters = context.Options.TokenValidationParameters;
+        if (validationParameters.ValidateIssuer && !IsIssuerAllowed(introspectionResult.Iss, validationParameters))
+        {
+            _logger.LogWarning("Token rejected: issuer '{Issuer}' is not allowed", introspectionResult.Iss);
+            context.Fail("Token issuer is not allowed");
+            return;
+        }
+
+        if (validationParameters.ValidateAudience && !IsAudienceAllowed(introspectionResult.Aud, validationParameters))
+        {
+            _logger.LogWarning("Token rejected: audience '{Audience}' is not allowed", introspectionResult.Aud);
+            context.Fail("Token audience is not allowed");
+            return;
+        }
+
+        if (validationParameters.ValidateLifetime)
+        {
+            var lifetimeError = ValidateLifetime(introspectionResult, validationParameters.ClockSkew);
+            if (lifetimeError != null)
+            {
+                _logger.LogWarning("Token rejected: {Reason}", lifetimeError);
+                context.Fail(lifetimeError);
+                return;
+            }
+        }
+
+        var nameClaimType = string.IsNullOrWhiteSpace(validationParameters.NameClaimType)
+            ? ClaimsIdentity.DefaultNameClaimType
+            : validationParameters.NameClaimType;
+        var roleClaimType = string.IsNullOrWhiteSpace(validationParameters.RoleClaimType)
+            ? ClaimsIdentity.DefaultRoleClaimType
+            : validationParameters.RoleClaimType;
+
+        var claims = BuildClaimsFromIntrospection(introspectionResult, nameClaimType, roleClaimType);
+        var identity = new ClaimsIdentity(claims, context.Scheme.Name, nameClaimType, roleClaimType);
+        context.Principal = new ClaimsPrincipal(identity);
+
         await base.TokenValidated(context);
     }
 
-    private static List<Claim> BuildClaimsFromIntrospection(IntrospectionResponse introspectionResult)
+    private bool TryGetAccessToken(TokenValidatedContext context, out string token)
+    {
+        token = string.Empty;
+
+        if (context.SecurityToken is JwtSecurityToken jwtToken && !string.IsNullOrEmpty(jwtToken.RawData))
+        {
+            token = jwtToken.RawData;
+            return true;
+        }
+
+        if (context.SecurityToken is GuardhouseOpaqueSecurityToken opaqueToken && !string.IsNullOrWhiteSpace(opaqueToken.Token))
+        {
+            token = opaqueToken.Token;
+            return true;
+        }
+
+        return TryGetBearerToken(context.HttpContext.Request, out token);
+    }
+
+    private static bool TryGetBearerToken(HttpRequest request, out string token)
+    {
+        token = string.Empty;
+
+        if (!request.Headers.TryGetValue(GuardhouseConstants.Headers.Authorization, out var authorization))
+        {
+            return false;
+        }
+
+        var headerValue = authorization.ToString();
+        if (!headerValue.StartsWith(GuardhouseConstants.Headers.BearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        token = headerValue.Substring(GuardhouseConstants.Headers.BearerPrefix.Length).Trim();
+        return !string.IsNullOrEmpty(token);
+    }
+
+    private bool IsTokenTypeAllowed(string? tokenType)
+    {
+        if (string.IsNullOrWhiteSpace(tokenType))
+        {
+            return true;
+        }
+
+        var allowedTokenTypes = _options.Value.TokenTypes;
+        if (allowedTokenTypes == null || allowedTokenTypes.Length == 0)
+        {
+            return true;
+        }
+
+        return allowedTokenTypes.Any(type => string.Equals(type, tokenType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsAlgorithmAllowed(string? algorithm, IEnumerable<string>? validAlgorithms)
+    {
+        if (string.IsNullOrWhiteSpace(algorithm))
+        {
+            return true;
+        }
+
+        if (string.Equals(algorithm, GuardhouseConstants.Algorithms.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (validAlgorithms == null)
+        {
+            return true;
+        }
+
+        var hasAny = false;
+        foreach (var validAlgorithm in validAlgorithms)
+        {
+            if (string.IsNullOrWhiteSpace(validAlgorithm))
+            {
+                continue;
+            }
+
+            hasAny = true;
+            if (string.Equals(validAlgorithm, algorithm, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return !hasAny;
+    }
+
+    private IEnumerable<string>? GetValidAlgorithms(TokenValidationParameters validationParameters)
+    {
+        if (validationParameters.ValidAlgorithms != null && validationParameters.ValidAlgorithms.Any())
+        {
+            return validationParameters.ValidAlgorithms;
+        }
+
+        var configuredAlgorithms = _options.Value.ValidAlgorithms;
+        return configuredAlgorithms != null && configuredAlgorithms.Length > 0
+            ? configuredAlgorithms
+            : validationParameters.ValidAlgorithms;
+    }
+
+    private static bool IsIssuerAllowed(string? issuer, TokenValidationParameters validationParameters)
+    {
+        if (string.IsNullOrWhiteSpace(issuer))
+        {
+            return false;
+        }
+
+        var normalizedIssuer = NormalizeIssuer(issuer);
+
+        if (!string.IsNullOrWhiteSpace(validationParameters.ValidIssuer) &&
+            string.Equals(normalizedIssuer, NormalizeIssuer(validationParameters.ValidIssuer), StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (validationParameters.ValidIssuers == null)
+        {
+            return false;
+        }
+
+        foreach (var validIssuer in validationParameters.ValidIssuers)
+        {
+            if (string.IsNullOrWhiteSpace(validIssuer))
+            {
+                continue;
+            }
+
+            if (string.Equals(normalizedIssuer, NormalizeIssuer(validIssuer), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsAudienceAllowed(string? audience, TokenValidationParameters validationParameters)
+    {
+        if (string.IsNullOrWhiteSpace(audience))
+        {
+            return false;
+        }
+
+        var validAudiences = GetValidAudiences(validationParameters);
+        if (validAudiences.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var tokenAudience in SplitAudiences(audience))
+        {
+            if (validAudiences.Contains(tokenAudience))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static HashSet<string> GetValidAudiences(TokenValidationParameters validationParameters)
+    {
+        var audiences = new HashSet<string>(StringComparer.Ordinal);
+
+        if (!string.IsNullOrWhiteSpace(validationParameters.ValidAudience))
+        {
+            audiences.Add(validationParameters.ValidAudience);
+        }
+
+        if (validationParameters.ValidAudiences != null)
+        {
+            foreach (var validAudience in validationParameters.ValidAudiences)
+            {
+                if (!string.IsNullOrWhiteSpace(validAudience))
+                {
+                    audiences.Add(validAudience);
+                }
+            }
+        }
+
+        return audiences;
+    }
+
+    private static IEnumerable<string> SplitAudiences(string audiences)
+    {
+        return audiences.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(audience => audience.Trim())
+            .Where(audience => !string.IsNullOrWhiteSpace(audience));
+    }
+
+    private static string? ValidateLifetime(IntrospectionResponse introspectionResult, TimeSpan clockSkew)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (introspectionResult.Nbf.HasValue)
+        {
+            try
+            {
+                var notBefore = DateTimeOffset.FromUnixTimeSeconds(introspectionResult.Nbf.Value);
+                if (notBefore - clockSkew > now)
+                {
+                    return "Token is not yet valid";
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return "Token not-before value is invalid";
+            }
+        }
+
+        if (introspectionResult.Exp.HasValue)
+        {
+            try
+            {
+                var expiresAt = DateTimeOffset.FromUnixTimeSeconds(introspectionResult.Exp.Value);
+                if (expiresAt + clockSkew <= now)
+                {
+                    return "Token has expired";
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return "Token expiration value is invalid";
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeIssuer(string issuer) => issuer.TrimEnd('/');
+
+    private static List<Claim> BuildClaimsFromIntrospection(IntrospectionResponse introspectionResult,
+        string nameClaimType, string roleClaimType)
     {
         var claims = new List<Claim>();
         var roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -93,14 +364,17 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (!string.IsNullOrEmpty(introspectionResult.Username))
         {
-            claims.Add(new Claim(ClaimTypes.Name, introspectionResult.Username));
+            claims.Add(new Claim(nameClaimType, introspectionResult.Username));
         }
 
         if (introspectionResult.Role != null && introspectionResult.Role.Length > 0)
         {
             foreach (var role in introspectionResult.Role)
             {
-                roles.Add(role);
+                if (!string.IsNullOrWhiteSpace(role))
+                {
+                    roles.Add(role);
+                }
             }
         }
 
@@ -109,13 +383,16 @@ public class GuardhouseIntrospectionJwtBearerEvents(
             var roleArray = introspectionResult.Roles.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             foreach (var role in roleArray)
             {
-                roles.Add(role);
+                if (!string.IsNullOrWhiteSpace(role))
+                {
+                    roles.Add(role);
+                }
             }
         }
 
         foreach (var role in roles)
         {
-            claims.Add(new Claim(ClaimTypes.Role, role));
+            claims.Add(new Claim(roleClaimType, role));
         }
 
         if (!string.IsNullOrEmpty(introspectionResult.Scope))
@@ -134,7 +411,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (!string.IsNullOrEmpty(introspectionResult.Aud))
         {
-            var audiences = introspectionResult.Aud.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var audiences = SplitAudiences(introspectionResult.Aud);
             foreach (var audience in audiences)
             {
                 claims.Add(new Claim(GuardhouseConstants.JwtClaims.Audience, audience));
