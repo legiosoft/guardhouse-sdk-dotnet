@@ -72,6 +72,44 @@ internal static class GuardhouseIntrospectionLogic
         return (identity, null);
     }
 
+    internal static void MergeClaims(ClaimsIdentity target, IEnumerable<Claim> additionalClaims)
+    {
+        var existingClaims = new HashSet<Claim>(target.Claims, ClaimTypeValueComparer.Instance);
+        foreach (var claim in additionalClaims)
+        {
+            if (existingClaims.Add(claim))
+            {
+                target.AddClaim(claim);
+            }
+        }
+    }
+
+    private sealed class ClaimTypeValueComparer : IEqualityComparer<Claim>
+    {
+        public static ClaimTypeValueComparer Instance { get; } = new();
+
+        public bool Equals(Claim? x, Claim? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return string.Equals(x.Type, y.Type, StringComparison.Ordinal)
+                   && string.Equals(x.Value, y.Value, StringComparison.Ordinal);
+        }
+
+        public int GetHashCode(Claim obj)
+        {
+            return HashCode.Combine(obj.Type, obj.Value);
+        }
+    }
+
     private static bool IsTokenTypeAllowed(string? tokenType, string[]? allowedTokenTypes)
     {
         if (string.IsNullOrWhiteSpace(tokenType))
@@ -268,7 +306,7 @@ internal static class GuardhouseIntrospectionLogic
         return null;
     }
 
-    private static bool LooksLikeJwt(string token)
+    internal static bool LooksLikeJwt(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
