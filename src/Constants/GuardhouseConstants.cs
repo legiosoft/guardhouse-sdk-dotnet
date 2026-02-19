@@ -61,6 +61,7 @@ public static class GuardhouseConstants
         public const double ClockSkewMinutes = 5.0;
         public const string DefaultScope = "api";
         public const int IntrospectionCacheTtlSeconds = 5;
+        public const int RefreshTokenCacheDurationDays = 30;
     }
 
     public static class Validation
