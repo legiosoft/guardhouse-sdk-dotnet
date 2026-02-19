@@ -8,6 +8,7 @@ using Constants;
 using Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -15,6 +16,7 @@ using Models;
 
 internal class ConfigureGuardhouseJwtOptions(
     IOptions<GuardhouseResourceOptions> resourceOptions,
+    IServiceScopeFactory serviceScopeFactory,
     ILoggerFactory loggerFactory)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
@@ -65,13 +67,18 @@ internal class ConfigureGuardhouseJwtOptions(
         {
             options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
 
+            var opaqueTokenValidator = new GuardhouseOpaqueTokenValidator(
+                serviceScopeFactory,
+                resourceOptions,
+                loggerFactory.CreateLogger<GuardhouseOpaqueTokenValidator>());
+
 #if NET8_0_OR_GREATER
             options.UseSecurityTokenValidators = false;
             options.TokenHandlers.Clear();
-            options.TokenHandlers.Add(new GuardhouseOpaqueTokenValidator());
+            options.TokenHandlers.Add(opaqueTokenValidator);
 #else
             options.SecurityTokenValidators.Clear();
-            options.SecurityTokenValidators.Add(new GuardhouseOpaqueTokenValidator());
+            options.SecurityTokenValidators.Add(opaqueTokenValidator);
 #endif
         }
         else
@@ -351,6 +358,24 @@ internal class ConfigureGuardhouseJwtOptions(
 
 internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IOptions<GuardhouseResourceOptions> _resourceOptions;
+    private readonly ILogger<GuardhouseOpaqueTokenValidator> _logger;
+
+    public GuardhouseOpaqueTokenValidator(
+        IServiceScopeFactory scopeFactory,
+        IOptions<GuardhouseResourceOptions> resourceOptions,
+        ILogger<GuardhouseOpaqueTokenValidator> logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(resourceOptions);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _scopeFactory = scopeFactory;
+        _resourceOptions = resourceOptions;
+        _logger = logger;
+    }
+
     public override bool CanValidateToken => true;
 
     public override bool CanWriteToken => false;
@@ -378,27 +403,84 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
         out SecurityToken validatedToken)
     {
         validatedToken = new GuardhouseOpaqueSecurityToken(tokenString);
-        return new ClaimsPrincipal(new ClaimsIdentity());
+
+        var result = ValidateTokenAsync(tokenString, validationParameters).GetAwaiter().GetResult();
+        if (!result.IsValid)
+        {
+            throw result.Exception ?? new SecurityTokenException("Token validation failed.");
+        }
+
+        if (result.SecurityToken != null)
+        {
+            validatedToken = result.SecurityToken;
+        }
+
+        if (result.ClaimsIdentity == null)
+        {
+            throw new SecurityTokenException("Token validation failed.");
+        }
+
+        return new ClaimsPrincipal(result.ClaimsIdentity);
     }
 
     public override Task<TokenValidationResult> ValidateTokenAsync(string token, TokenValidationParameters validationParameters)
     {
+        return ValidateTokenInternalAsync(token, validationParameters);
+    }
+
+    private async Task<TokenValidationResult> ValidateTokenInternalAsync(
+        string token,
+        TokenValidationParameters validationParameters)
+    {
         if (!CanReadToken(token))
         {
-            return Task.FromResult(new TokenValidationResult
-            {
-                IsValid = false,
-                Exception = new SecurityTokenException("Token is null or empty.")
-            });
+            return InvalidResult("Token is null or empty.");
         }
 
-        var validatedToken = new GuardhouseOpaqueSecurityToken(token);
-        return Task.FromResult(new TokenValidationResult
+        IntrospectionResponse introspectionResult;
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var introspectionService = scope.ServiceProvider.GetRequiredService<IGuardhouseIntrospectionService>();
+            introspectionResult = await introspectionService.IntrospectTokenAsync(token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Token introspection failed");
+            return InvalidResult("Token introspection failed", ex);
+        }
+
+        var identityResult = GuardhouseIntrospectionLogic.BuildIdentityFromIntrospection(
+            token,
+            introspectionResult,
+            validationParameters,
+            _resourceOptions.Value,
+            GuardhouseConstants.Authentication.DefaultScheme);
+
+        if (identityResult.Identity == null)
+        {
+            _logger.LogWarning("Token rejected: {Reason}", identityResult.FailureReason);
+            return InvalidResult(identityResult.FailureReason ?? "Token validation failed");
+        }
+
+        return new TokenValidationResult
         {
             IsValid = true,
-            SecurityToken = validatedToken,
-            ClaimsIdentity = new ClaimsIdentity()
-        });
+            SecurityToken = new GuardhouseOpaqueSecurityToken(token),
+            ClaimsIdentity = identityResult.Identity
+        };
+    }
+
+    private static TokenValidationResult InvalidResult(string message, Exception? exception = null)
+    {
+        var securityException = exception as SecurityTokenException
+            ?? new SecurityTokenException(message, exception);
+
+        return new TokenValidationResult
+        {
+            IsValid = false,
+            Exception = securityException
+        };
     }
 
     public override SecurityToken ReadToken(XmlReader reader, TokenValidationParameters validationParameters)
