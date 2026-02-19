@@ -525,7 +525,7 @@ public class GuardhouseTokenServiceTests
     }
 
     [Fact]
-    public async Task IsTokenActiveAsync_WhenIntrospectionFails_ShouldReturnFalse()
+    public async Task IsTokenActiveAsync_WhenIntrospectionFails_ShouldThrow()
     {
         _mockHttpMessageHandler
             .Protected()
@@ -536,9 +536,8 @@ public class GuardhouseTokenServiceTests
             });
 
         var tokenService = CreateTokenService();
-        var isActive = await tokenService.IsTokenActiveAsync("test_token");
 
-        isActive.Should().BeFalse();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.IsTokenActiveAsync("test_token"));
     }
 
     #endregion

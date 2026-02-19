@@ -87,7 +87,7 @@ public class GuardhouseJwtBearerEventsTests
     }
 
     [Fact]
-    public async Task TokenValidated_WithIntrospectionMode_ReplacesPrincipal()
+    public async Task TokenValidated_WithIntrospectionMode_MergesPrincipalClaims()
     {
         var context = CreateTokenValidatedContext(token: "token123");
         
@@ -108,8 +108,8 @@ public class GuardhouseJwtBearerEventsTests
 
         await _events.TokenValidated(context);
 
-        context.Principal.Should().NotBe(originalPrincipal);
-        context.Principal?.FindFirst("old_claim").Should().BeNull();
+        context.Principal.Should().BeSameAs(originalPrincipal);
+        context.Principal?.FindFirst("old_claim").Should().NotBeNull();
         context.Principal?.FindFirst("sub")?.Value.Should().Be("new_user");
     }
 
