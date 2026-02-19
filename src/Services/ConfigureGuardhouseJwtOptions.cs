@@ -450,24 +450,24 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
             return InvalidResult("Token introspection failed", ex);
         }
 
-        var identityResult = GuardhouseIntrospectionLogic.BuildIdentityFromIntrospection(
+        var (identity, failureReason) = GuardhouseIntrospectionLogic.BuildIdentityFromIntrospection(
             token,
             introspectionResult,
             validationParameters,
             _resourceOptions.Value,
             GuardhouseConstants.Authentication.DefaultScheme);
 
-        if (identityResult.Identity == null)
+        if (identity == null)
         {
-            _logger.LogWarning("Token rejected: {Reason}", identityResult.FailureReason);
-            return InvalidResult(identityResult.FailureReason ?? "Token validation failed");
+            _logger.LogWarning("Token rejected: {Reason}", failureReason);
+            return InvalidResult(failureReason ?? "Token validation failed");
         }
 
         return new TokenValidationResult
         {
             IsValid = true,
             SecurityToken = new GuardhouseOpaqueSecurityToken(token),
-            ClaimsIdentity = identityResult.Identity
+            ClaimsIdentity = identity
         };
     }
 
