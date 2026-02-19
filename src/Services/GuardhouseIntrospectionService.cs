@@ -3,6 +3,7 @@ namespace Guardhouse.SDK.Services;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -15,7 +16,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NodaTime;
 
 /// <summary>
 /// Service for introspecting tokens with the identity server using a micro-cache strategy.
@@ -30,6 +30,9 @@ public class GuardhouseIntrospectionService(
     private readonly ILogger<GuardhouseIntrospectionService> _logger = logger ?? NullLogger<GuardhouseIntrospectionService>.Instance;
 
     private const string IntrospectionCacheKeyPrefix = "guardhouse_introspection_";
+    private const int IntrospectionLockCount = 256;
+
+    private static readonly SemaphoreSlim[] IntrospectionLocks = CreateIntrospectionLocks();
 
     /// <summary>
     /// Introspects a token to determine if it is active and retrieve its claims.
@@ -59,91 +62,107 @@ public class GuardhouseIntrospectionService(
             return cachedResult;
         }
 
-        var authorityUri = EnsureAuthorityUri(resourceOptions.Authority, resourceOptions.RequireHttps);
-        var introspectionEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectIntrospect).ToString();
-
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds));
-        using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-
-        var formData = new List<KeyValuePair<string, string>>
-        {
-            new("token", token),
-            new("token_type_hint", "access_token")
-        };
-
-        if (resourceOptions.IntrospectionCredentialTransmission == IntrospectionCredentialTransmission.BasicAuth)
-        {
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                "Basic",
-                Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                    $"{resourceOptions.IntrospectionClientId}:{resourceOptions.IntrospectionClientSecret}")));
-        }
-        else
-        {
-            formData.Add(new KeyValuePair<string, string>("client_id", resourceOptions.IntrospectionClientId));
-            formData.Add(new KeyValuePair<string, string>("client_secret", resourceOptions.IntrospectionClientSecret));
-        }
-
-        request.Content = new FormUrlEncodedContent(formData);
-
-        _logger.LogDebugIf(options.Value.EnableDebug, "Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
-
-        HttpResponseMessage response;
+        var cacheLock = GetCacheLock(cacheKey);
+        await cacheLock.WaitAsync(cancellationToken);
         try
         {
-            response = await httpClient.SendAsync(request, combinedCts.Token);
-        }
-        catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
-        {
-            _logger.LogError("Introspection request timed out after {TimeoutSeconds} seconds", GuardhouseConstants.Defaults.RequestTimeoutSeconds);
-            throw new TimeoutException($"Introspection request timed out after {GuardhouseConstants.Defaults.RequestTimeoutSeconds} seconds.");
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Failed to send introspection request to {IntrospectionEndpoint}", introspectionEndpoint);
-            throw new InvalidOperationException(
-                $"Failed to send introspection request to {introspectionEndpoint}. " +
-                $"Error: {ex.Message}. " +
-                $"Verify your Guardhouse instance is accessible and introspection credentials are correct.", ex);
-        }
+            if (memoryCache.TryGetValue(cacheKey, out cachedResult) && cachedResult != null)
+            {
+                _logger.LogDebugIf(options.Value.EnableDebug, "Using cached introspection result (double-checked)");
+                return cachedResult;
+            }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var authorityUri = EnsureAuthorityUri(resourceOptions.Authority, resourceOptions.RequireHttps);
+            var introspectionEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectIntrospect).ToString();
 
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError(
-                "Introspection request failed with status {StatusCode}. Response: {Response}",
-                response.StatusCode,
-                responseContent);
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds));
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-            var errorDetails = ParseErrorResponse(responseContent);
-            throw new InvalidOperationException(
-                $"Failed to introspect token from {introspectionEndpoint}. " +
-                $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
-                $"{errorDetails}. " +
-                $"Verify your IntrospectionClientId and IntrospectionClientSecret are configured correctly in GuardhouseResourceOptions.");
-        }
+            using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
 
-        var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
+            var formData = new List<KeyValuePair<string, string>>
+            {
+                new("token", token),
+                new("token_type_hint", "access_token")
+            };
 
-        _logger.LogDebugIf(options.Value.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
+            if (resourceOptions.IntrospectionCredentialTransmission == IntrospectionCredentialTransmission.BasicAuth)
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Basic",
+                    Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                        $"{resourceOptions.IntrospectionClientId}:{resourceOptions.IntrospectionClientSecret}")));
+            }
+            else
+            {
+                formData.Add(new KeyValuePair<string, string>("client_id", resourceOptions.IntrospectionClientId));
+                formData.Add(new KeyValuePair<string, string>("client_secret", resourceOptions.IntrospectionClientSecret));
+            }
 
-        if (introspectionResponse.Active)
-        {
-            var cacheTtl = TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds);
+            request.Content = new FormUrlEncodedContent(formData);
+
+            _logger.LogDebugIf(options.Value.EnableDebug, "Introspecting token at {IntrospectionEndpoint}", introspectionEndpoint);
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await httpClient.SendAsync(request, combinedCts.Token);
+            }
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            {
+                _logger.LogError("Introspection request timed out after {TimeoutSeconds} seconds", GuardhouseConstants.Defaults.RequestTimeoutSeconds);
+                throw new TimeoutException($"Introspection request timed out after {GuardhouseConstants.Defaults.RequestTimeoutSeconds} seconds.");
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Failed to send introspection request to {IntrospectionEndpoint}", introspectionEndpoint);
+                throw new InvalidOperationException(
+                    $"Failed to send introspection request to {introspectionEndpoint}. " +
+                    $"Error: {ex.Message}. " +
+                    $"Verify your Guardhouse instance is accessible and introspection credentials are correct.", ex);
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError(
+                    "Introspection request failed with status {StatusCode}. Response: {Response}",
+                    response.StatusCode,
+                    responseContent);
+
+                var errorDetails = ParseErrorResponse(responseContent);
+                throw new InvalidOperationException(
+                    $"Failed to introspect token from {introspectionEndpoint}. " +
+                    $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
+                    $"{errorDetails}. " +
+                    $"Verify your IntrospectionClientId and IntrospectionClientSecret are configured correctly in GuardhouseResourceOptions.");
+            }
+
+            var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? throw new InvalidOperationException("Failed to deserialize introspection response");
+
+            _logger.LogDebugIf(options.Value.EnableDebug, "Token introspection completed, active: {Active}", introspectionResponse.Active);
+
+            var cacheTtl = introspectionResponse.Active
+                ? TimeSpan.FromSeconds(resourceOptions.IntrospectionCacheTtlSeconds)
+                : TimeSpan.FromSeconds(resourceOptions.IntrospectionNegativeCacheTtlSeconds);
+
             if (cacheTtl > TimeSpan.Zero)
             {
                 memoryCache.Set(cacheKey, introspectionResponse, cacheTtl);
                 _logger.LogDebugIf(options.Value.EnableDebug, "Cached introspection result for {CacheTtl}", cacheTtl);
             }
+
+            return introspectionResponse;
+        }
+        finally
+        {
+            cacheLock.Release();
         }
 
-        return introspectionResponse;
     }
 
     /// <summary>
@@ -154,24 +173,32 @@ public class GuardhouseIntrospectionService(
     /// <returns>True if the token is active, false otherwise.</returns>
     public async Task<bool> IsTokenActiveAsync(string token, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var introspectionResult = await IntrospectTokenAsync(token, cancellationToken);
-            return introspectionResult.Active;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to check token activity");
-            return false;
-        }
+        var introspectionResult = await IntrospectTokenAsync(token, cancellationToken);
+        return introspectionResult.Active;
     }
 
     private static string GetTokenHash(string token)
     {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(token);
-        var hash = sha256.ComputeHash(bytes);
+        var tokenBytes = MemoryMarshal.AsBytes(token.AsSpan());
+        var hash = SHA256.HashData(tokenBytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static SemaphoreSlim[] CreateIntrospectionLocks()
+    {
+        var locks = new SemaphoreSlim[IntrospectionLockCount];
+        for (var index = 0; index < locks.Length; index++)
+        {
+            locks[index] = new SemaphoreSlim(1, 1);
+        }
+
+        return locks;
+    }
+
+    private static SemaphoreSlim GetCacheLock(string cacheKey)
+    {
+        var lockIndex = (cacheKey.GetHashCode() & int.MaxValue) % IntrospectionLocks.Length;
+        return IntrospectionLocks[lockIndex];
     }
 
     private static string ParseErrorResponse(string responseContent)
