@@ -226,7 +226,7 @@ public static class ServiceCollectionExtensions
             .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.RequestTimeout)
             .WaitAndRetryAsync(
                 maxRetryAttempts,
-                (int retryAttempt, DelegateResult<HttpResponseMessage> result, Context _) =>
+                (retryAttempt, result, _) =>
                     GetRetryDelay(result, retryAttempt),
                 (_, _, _, _) => Task.CompletedTask);
     }
