@@ -54,6 +54,12 @@ internal class ConfigureGuardhouseJwtOptions(
         ConfigureBackchannel(options, opts, authorityUri);
 
         options.TokenValidationParameters = BuildTokenValidationParameters(opts, authority);
+        var signingKeyResolver = new GuardhouseJwksSigningKeyResolver(
+            opts,
+            options,
+            authorityUri,
+            loggerFactory);
+        options.TokenValidationParameters.IssuerSigningKeyResolver = signingKeyResolver.ResolveSigningKeys;
 
         var validIssuersLog = options.TokenValidationParameters.ValidIssuers?.Any() == true
             ? string.Join(", ", options.TokenValidationParameters.ValidIssuers)
@@ -87,7 +93,7 @@ internal class ConfigureGuardhouseJwtOptions(
         }
         else
         {
-            options.Events = BuildJwtBearerEvents(options);
+            options.Events = BuildJwtBearerEvents(options, signingKeyResolver);
         }
 
         options.RefreshOnIssuerKeyNotFound = true;
@@ -133,10 +139,14 @@ internal class ConfigureGuardhouseJwtOptions(
         };
     }
 
-    private JwtBearerEvents BuildJwtBearerEvents(JwtBearerOptions options)
+    private JwtBearerEvents BuildJwtBearerEvents(JwtBearerOptions options, GuardhouseJwksSigningKeyResolver signingKeyResolver)
     {
         return new JwtBearerEvents
         {
+            OnMessageReceived = async context =>
+            {
+                await signingKeyResolver.WarmupAsync(context.HttpContext.RequestAborted);
+            },
             OnAuthenticationFailed = context =>
             {
                 if (context.Exception is SecurityTokenSignatureKeyNotFoundException)
