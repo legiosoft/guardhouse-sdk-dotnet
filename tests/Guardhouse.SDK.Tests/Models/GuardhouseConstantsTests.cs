@@ -15,7 +15,7 @@ public class GuardhouseConstantsTests
     [Fact]
     public void Endpoints_WellKnownJwks_ShouldBeCorrect()
     {
-        Constants.GuardhouseConstants.Endpoints.WellKnownJwks.Should().Be(".well-known/jwks.json");
+        Constants.GuardhouseConstants.Endpoints.WellKnownJwks.Should().Be(".well-known/jwks");
     }
 
     [Fact]

@@ -318,14 +318,18 @@ public class GuardhouseJwtBearerEventsTests
             TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
             {
                 ValidIssuer = "https://test.com",
-                ValidAudience = "api"
+                ValidAudience = "api",
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false,
+                RequireExpirationTime = false
             }
         };
 
         var scheme = new Microsoft.AspNetCore.Authentication.AuthenticationScheme("Bearer", "Bearer", typeof(JwtBearerHandler));
         var context = new TokenValidatedContext(httpContext, scheme, options)
         {
-            Principal = new ClaimsPrincipal(new ClaimsIdentity()),
+            Principal = new ClaimsPrincipal(new ClaimsIdentity(authenticationType: "Bearer")),
             SecurityToken = jwtToken
         };
 
