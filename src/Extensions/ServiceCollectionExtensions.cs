@@ -2,7 +2,9 @@
 
 namespace Guardhouse.SDK.Extensions;
 
+using System;
 using System.Net.Http;
+using System.Linq;
 using Constants;
 using Models;
 using Services;
@@ -36,6 +38,9 @@ public static class ServiceCollectionExtensions
 
         services.AddOptions<GuardhouseClientOptions>()
             .ValidateDataAnnotations()
+            .Validate(
+                IsOfflineAccessScopeValid,
+                "EnableTokenRefresh requires the offline_access scope. Add offline_access to Scope or set IncludeOfflineAccessScope = true.")
             .ValidateOnStart();
 
         services.AddSingleton<IClock>(SystemClock.Instance);
@@ -229,6 +234,32 @@ public static class ServiceCollectionExtensions
                 (retryAttempt, result, _) =>
                     GetRetryDelay(result, retryAttempt),
                 (_, _, _, _) => Task.CompletedTask);
+    }
+
+    private static bool IsOfflineAccessScopeValid(GuardhouseClientOptions options)
+    {
+        if (!options.EnableTokenRefresh)
+        {
+            return true;
+        }
+
+        if (options.IncludeOfflineAccessScope)
+        {
+            return true;
+        }
+
+        return HasScope(options.Scope, GuardhouseConstants.Scopes.OfflineAccess);
+    }
+
+    private static bool HasScope(string? scope, string scopeToFind)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return false;
+        }
+
+        return scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(s => string.Equals(s, scopeToFind, StringComparison.OrdinalIgnoreCase));
     }
 
     private static TimeSpan GetRetryDelay(DelegateResult<HttpResponseMessage> result, int retryAttempt)

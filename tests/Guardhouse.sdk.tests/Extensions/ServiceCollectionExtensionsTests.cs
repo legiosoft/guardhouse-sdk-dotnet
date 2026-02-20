@@ -24,6 +24,7 @@ public class ServiceCollectionExtensionsTests
             options.ClientId = "test-client";
             options.ClientSecret = "test-secret";
             options.Scope = "api";
+            options.IncludeOfflineAccessScope = true;
         });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));
@@ -38,7 +39,7 @@ public class ServiceCollectionExtensionsTests
             authority: "https://test.com",
             clientId: "test-client",
             clientSecret: "test-secret",
-            scope: "api");
+            scope: "api offline_access");
 
         var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
@@ -46,7 +47,28 @@ public class ServiceCollectionExtensionsTests
         options.Authority.Should().Be("https://test.com");
         options.ClientId.Should().Be("test-client");
         options.ClientSecret.Should().Be("test-secret");
-        options.Scope.Should().Be("api");
+        options.Scope.Should().Be("api offline_access");
+    }
+
+    [Fact]
+    public void AddGuardhouseClient_WithRefreshEnabledWithoutOfflineAccess_ShouldFailValidation()
+    {
+        var services = new ServiceCollection();
+        services.AddGuardhouseClient(options =>
+        {
+            options.Authority = "https://test.com";
+            options.ClientId = "test-client";
+            options.ClientSecret = "test-secret";
+            options.Scope = "api";
+            options.EnableTokenRefresh = true;
+            options.IncludeOfflineAccessScope = false;
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        Action act = () => _ = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+        act.Should().Throw<OptionsValidationException>()
+            .WithMessage("*offline_access*");
     }
 
     [Fact]
@@ -136,6 +158,7 @@ public class ServiceCollectionExtensionsTests
                 co.Authority = "https://test.com";
                 co.ClientId = "test-client";
                 co.ClientSecret = "test-secret";
+                co.IncludeOfflineAccessScope = true;
             },
             configureResourceAction: ro => {
                 ro.Authority = "https://test.com";

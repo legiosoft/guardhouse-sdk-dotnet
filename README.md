@@ -37,6 +37,7 @@ builder.Services.AddGuardhouseClient(options =>
     options.Scope = "api";
     options.EnableTokenCaching = true;
     options.EnableTokenRefresh = true;
+    options.IncludeOfflineAccessScope = true;
 });
 
 var app = builder.Build();
@@ -70,7 +71,7 @@ builder.Services.AddGuardhouseClient(
     authority: "https://your-guardhouse-server.com",
     clientId: "your-client-id",
     clientSecret: "your-client-secret",
-    scope: "api"
+    scope: "api offline_access"
 );
 ```
 

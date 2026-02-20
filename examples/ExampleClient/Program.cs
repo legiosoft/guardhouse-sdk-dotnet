@@ -19,6 +19,7 @@ builder.Services.AddGuardhouseClient(options =>
     options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
     options.EnableTokenCaching = true;
     options.EnableTokenRefresh = true;
+    options.IncludeOfflineAccessScope = true;
     options.EnableHttpResilience = true;
 });
 
