@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Net.Http;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -140,11 +141,12 @@ public class GuardhouseTokenService(
                 async (ct) =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+                    var scope = GetRequestedScope(options1);
                     request.Content = new FormUrlEncodedContent([
                         new KeyValuePair<string, string>("client_id", options1.ClientId),
                         new KeyValuePair<string, string>("client_secret", options1.ClientSecret),
                         new KeyValuePair<string, string>("grant_type", "client_credentials"),
-                        new KeyValuePair<string, string>("scope", options1.Scope)
+                        new KeyValuePair<string, string>("scope", scope)
                     ]);
                     return await httpClient.SendAsync(request, ct);
                 },
@@ -186,6 +188,40 @@ public class GuardhouseTokenService(
         logger.LogDebugIf(options1.EnableDebug, "Successfully obtained new token, expires in {ExpiresIn} seconds", tokenResponse.ExpiresIn);
 
         return tokenResponse.WithClock(_clock);
+    }
+
+    private static string GetRequestedScope(GuardhouseClientOptions options1)
+    {
+        var scope = options1.Scope ?? string.Empty;
+
+        if (!options1.IncludeOfflineAccessScope)
+        {
+            return scope;
+        }
+
+        return AppendScope(scope, GuardhouseConstants.Scopes.OfflineAccess);
+    }
+
+    private static string AppendScope(string scope, string scopeToAppend)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return scopeToAppend;
+        }
+
+        if (ScopeContains(scope, scopeToAppend))
+        {
+            return scope;
+        }
+
+        return $"{scope.Trim()} {scopeToAppend}";
+    }
+
+    private static bool ScopeContains(string scope, string scopeToFind)
+    {
+        return scope
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(scopeToFind, StringComparer.Ordinal);
     }
 
     /// <summary>

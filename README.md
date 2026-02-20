@@ -147,6 +147,7 @@ builder.Services.AddGuardhouseClient(options =>
     options.EnableTokenCaching = true;                              // Default: true
     options.CacheExpirationBufferSeconds = 60;                         // Default: 60
     options.EnableTokenRefresh = true;                                // Default: true
+    options.IncludeOfflineAccessScope = false;                        // Default: false (set true if your identity server requires offline_access for refresh tokens)
 
      // Resilience
     options.EnableHttpResilience = true;                             // Default: true

@@ -51,6 +51,11 @@ public static class GuardhouseConstants
         public const string TokenType = "token_type";
     }
 
+    public static class Scopes
+    {
+        public const string OfflineAccess = "offline_access";
+    }
+
     public static class Defaults
     {
         public const int JwksCacheDurationHours = 24;

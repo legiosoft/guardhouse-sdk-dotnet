@@ -57,6 +57,7 @@ public class OptionsTests
         options.RequireHttps.Should().BeTrue();
         options.EnableTokenCaching.Should().BeTrue();
         options.EnableTokenRefresh.Should().BeTrue();
+        options.IncludeOfflineAccessScope.Should().BeFalse();
         options.CacheExpirationBufferSeconds.Should().Be(60);
         options.RequestTimeoutSeconds.Should().Be(30);
         options.MaxRetryAttempts.Should().Be(3);

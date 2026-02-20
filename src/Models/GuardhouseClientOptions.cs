@@ -59,6 +59,12 @@ public class GuardhouseClientOptions
     public bool EnableTokenRefresh { get; set; } = true;
 
     /// <summary>
+    /// Automatically appends the offline_access scope when requesting tokens (default: false).
+    /// Enable this if your identity server requires offline_access to issue refresh tokens.
+    /// </summary>
+    public bool IncludeOfflineAccessScope { get; set; }
+
+    /// <summary>
     /// The timeout in seconds for HTTP requests to the identity server (default: 30).
     /// </summary>
     public int RequestTimeoutSeconds { get; set; } = GuardhouseConstants.Defaults.RequestTimeoutSeconds;

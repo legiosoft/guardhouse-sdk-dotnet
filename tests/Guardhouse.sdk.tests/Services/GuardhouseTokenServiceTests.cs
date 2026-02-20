@@ -103,6 +103,87 @@ public class GuardhouseTokenServiceTests
     }
 
     [Fact]
+    public async Task RequestTokenAsync_WithOfflineAccessScopeEnabled_ShouldAppendOfflineAccess()
+    {
+        string? contentData = null;
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                contentData = await req.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
+            });
+
+        var options = new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "test-client",
+            ClientSecret = "test-secret",
+            Scope = "api read",
+            EnableTokenRefresh = true,
+            IncludeOfflineAccessScope = true
+        };
+
+        var tokenService = new GuardhouseTokenService(
+            _httpClient,
+            _memoryCache,
+            Options.Create(options),
+            _mockLogger.Object,
+            _testClock);
+
+        await tokenService.RequestTokenAsync();
+
+        contentData.Should().NotBeNull();
+        contentData.Should().Contain("scope=api+read+offline_access");
+    }
+
+    [Fact]
+    public async Task RequestTokenAsync_WithOfflineAccessAlreadyPresent_ShouldNotDuplicate()
+    {
+        string? contentData = null;
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                contentData = await req.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
+            });
+
+        var options = new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "test-client",
+            ClientSecret = "test-secret",
+            Scope = "api offline_access",
+            EnableTokenRefresh = true,
+            IncludeOfflineAccessScope = true
+        };
+
+        var tokenService = new GuardhouseTokenService(
+            _httpClient,
+            _memoryCache,
+            Options.Create(options),
+            _mockLogger.Object,
+            _testClock);
+
+        await tokenService.RequestTokenAsync();
+
+        contentData.Should().NotBeNull();
+        contentData.Should().Contain("scope=api+offline_access");
+        contentData.Should().NotContain("offline_access+offline_access");
+    }
+
+    [Fact]
     public async Task RequestTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
         _mockHttpMessageHandler

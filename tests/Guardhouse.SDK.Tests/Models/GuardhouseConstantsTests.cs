@@ -67,6 +67,12 @@ public class GuardhouseConstantsTests
     }
 
     [Fact]
+    public void Scopes_OfflineAccess_ShouldBeCorrect()
+    {
+        Constants.GuardhouseConstants.Scopes.OfflineAccess.Should().Be("offline_access");
+    }
+
+    [Fact]
     public void Defaults_JwksCacheDurationHours_ShouldBe24()
     {
         Constants.GuardhouseConstants.Defaults.JwksCacheDurationHours.Should().Be(24);
