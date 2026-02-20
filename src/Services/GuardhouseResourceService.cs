@@ -105,6 +105,11 @@ public class GuardhouseResourceService(
         JwtBearerOptions jwtOptions,
         CancellationToken cancellationToken)
     {
+        if (jwtOptions.TokenValidationParameters.IssuerSigningKeyResolver?.Target is GuardhouseJwksSigningKeyResolver resolver)
+        {
+            await resolver.WarmupAsync(cancellationToken);
+        }
+
         var handler = new JwtSecurityTokenHandler
         {
             MapInboundClaims = jwtOptions.MapInboundClaims
