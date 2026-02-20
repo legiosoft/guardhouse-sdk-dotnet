@@ -55,9 +55,13 @@ internal class ConfigureGuardhouseJwtOptions(
 
         options.TokenValidationParameters = BuildTokenValidationParameters(opts, authority);
 
+        var validIssuersLog = options.TokenValidationParameters.ValidIssuers?.Any() == true
+            ? string.Join(", ", options.TokenValidationParameters.ValidIssuers)
+            : options.TokenValidationParameters.ValidIssuer ?? "null";
+
         _logger.LogDebugIf(opts.EnableDebug,
-            "TokenValidationParameters: ValidIssuer={ValidIssuer}, ValidateIssuerSigningKey={ValidateIssuerSigningKey}, ValidAlgorithms={ValidAlgorithms}",
-            options.TokenValidationParameters.ValidIssuer,
+            "TokenValidationParameters: ValidIssuers={ValidIssuers}, ValidateIssuerSigningKey={ValidateIssuerSigningKey}, ValidAlgorithms={ValidAlgorithms}",
+            validIssuersLog,
             options.TokenValidationParameters.ValidateIssuerSigningKey,
             options.TokenValidationParameters.ValidAlgorithms?.Count() > 0
                 ? string.Join(", ", options.TokenValidationParameters.ValidAlgorithms)
@@ -114,7 +118,7 @@ internal class ConfigureGuardhouseJwtOptions(
         return new TokenValidationParameters
         {
             ValidateIssuer = opts.ValidateIssuer,
-            ValidIssuer = authority,
+            ValidIssuers = BuildValidIssuers(authority),
             ValidateAudience = opts.ValidateAudience,
             ValidAudience = opts.Audience,
             ValidateLifetime = opts.ValidateLifetime,
@@ -334,6 +338,23 @@ internal class ConfigureGuardhouseJwtOptions(
         }
 
         return normalized.Count > 0 ? normalized.ToArray() : [GuardhouseConstants.TokenTypes.AtJwt];
+    }
+
+    private static string[]? BuildValidIssuers(string authority)
+    {
+        var normalized = NormalizeAuthority(authority);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        var issuers = new HashSet<string>(StringComparer.Ordinal)
+        {
+            normalized,
+            $"{normalized}/"
+        };
+
+        return issuers.Count > 0 ? issuers.ToArray() : null;
     }
 
     private static string[]? NormalizeList(string[]? values)
