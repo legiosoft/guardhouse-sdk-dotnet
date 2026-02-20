@@ -466,7 +466,7 @@ This sends `client_id` and `client_secret` as form parameters instead of HTTP Ba
 
 ## Documentation
 
-- Guardhouse Documentation: https://docs.guardhouse.cloud
+- Guardhouse Documentation: https://guardhouse.cloud/docs
 - GitHub Issues: https://github.com/legiosoft/guardhouse-sdk-dotnet/issues
 - Deployment Guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
@@ -477,5 +477,5 @@ Licensed under Apache License 2.0
 ## Support
 
 - Guardhouse Cloud: https://guardhouse.cloud
-- Documentation: https://docs.guardhouse.cloud
+- Documentation: https://guardhouse.cloud/docs
 - GitHub Repository: https://github.com/legiosoft/guardhouse-sdk-dotnet
