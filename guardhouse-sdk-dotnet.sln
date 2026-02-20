@@ -8,7 +8,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Guardhouse.SDK", "src\Guardhouse.SDK.csproj", "{B104FBBE-CB4B-A36C-9EAE-CB0681DF88ED}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Guardhouse.sdk.tests", "tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj", "{D3E102FC-7281-4B5D-7889-0E024966EB6B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Guardhouse.sdk.tests", "tests\Guardhouse.sdk.tests\Guardhouse.sdk.tests.csproj", "{D3E102FC-7281-4B5D-7889-0E024966EB6B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
