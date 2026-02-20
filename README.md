@@ -1,6 +1,6 @@
 # Guardhouse SDK for .NET
 
-Official .NET SDK for https://guardhouse.cloud platform. Use it for .NET clients when you already configured everything in Guardhouse Cloud.
+Official .NET SDK for Guardhouse Cloud. Use it in .NET applications to request access tokens or validate incoming tokens against your Guardhouse instance.
 
 ## Installation
 
@@ -139,26 +139,30 @@ builder.Services.AddGuardhouseResource(options =>
 ```csharp
 builder.Services.AddGuardhouseClient(options =>
 {
-    options.Authority = "https://your-guardhouse-server.com";       // Required
-    options.ClientId = "your-client-id";                          // Required
-    options.ClientSecret = "your-client-secret";                    // Required
-    options.Scope = "api";                                        // Default: "api"
+    options.Authority = "https://your-guardhouse-server.com";            // Required
+    options.RequireHttps = true;                                          // Default: true
+    options.ClientId = "your-client-id";                                 // Required
+    options.ClientSecret = "your-client-secret";                         // Required
+    options.Scope = "api";                                                // Default: "api"
 
-    // Optional features
-    options.EnableTokenCaching = true;                              // Default: true
-    options.CacheExpirationBufferSeconds = 60;                         // Default: 60
-    options.EnableTokenRefresh = true;                                // Default: true
-    options.IncludeOfflineAccessScope = false;                        // Default: false (set true if your identity server requires offline_access for refresh tokens)
+    // Token caching & refresh
+    options.EnableTokenCaching = true;                                   // Default: true
+    options.CacheExpirationBufferSeconds = 60;                           // Default: 60
+    options.RefreshTokenCacheDurationDays = 30;                          // Default: 30
+    options.EnableTokenRefresh = true;                                   // Default: true
+    options.IncludeOfflineAccessScope = false;                           // Default: false (set true if your identity server requires offline_access for refresh tokens)
 
-     // Resilience
-    options.EnableHttpResilience = true;                             // Default: true
-    options.RequestTimeoutSeconds = 30;                                // Default: 30
-    options.MaxRetryAttempts = 3;                                     // Default: 3
+    // Resilience
+    options.EnableHttpResilience = true;                                 // Default: true
+    options.RequestTimeoutSeconds = 30;                                  // Default: 30
+    options.MaxRetryAttempts = 3;                                        // Default: 3
 
     // Introspection (optional - for debugging purposes)
-    options.IntrospectionClientId = "your-introspection-client-id"; // Optional
+    options.IntrospectionClientId = "your-introspection-client-id";      // Optional
     options.IntrospectionClientSecret = "your-introspection-client-secret"; // Optional
     options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
+
+    options.EnableDebug = false;                                         // Default: false
 });
 ```
 
@@ -167,36 +171,46 @@ builder.Services.AddGuardhouseClient(options =>
 ```csharp
 builder.Services.AddGuardhouseResource(options =>
 {
-    options.Authority = "https://your-guardhouse-server.com";       // Required
-    options.Audience = "my_resource_api";                        // Required
+    options.Authority = "https://your-guardhouse-server.com";            // Required
+    options.Audience = "my_resource_api";                                // Required
+    options.PolicyName = "Guardhouse";                                    // Default: "Guardhouse"
 
     // Validation mode: JWT Signature or Introspection
-    options.ValidationMode = TokenValidationMode.JwtSignature;    // Default: JWT Signature
+    options.ValidationMode = TokenValidationMode.JwtSignature;            // Default: JWT Signature
 
-     // Required for Introspection mode
-    options.IntrospectionClientId = "your-client-id";          // Required for introspection
-    options.IntrospectionClientSecret = "your-client-secret";    // Required for introspection
+    // Required for Introspection mode
+    options.IntrospectionClientId = "your-client-id";                     // Required for introspection
+    options.IntrospectionClientSecret = "your-client-secret";             // Required for introspection
     options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
 
     // Token validation settings
-    options.ValidateIssuer = true;                                 // Default: true
-    options.ValidateAudience = true;                               // Default: true
-    options.ValidateLifetime = true;                                // Default: true
-    options.ValidateIssuerSigningKey = true;                        // Default: true
+    options.ValidateIssuer = true;                                         // Default: true
+    options.ValidateAudience = true;                                       // Default: true
+    options.ValidateLifetime = true;                                       // Default: true
+    options.ValidateIssuerSigningKey = true;                               // Default: true
 
     // JWT validation
-    options.ValidAlgorithms = new[] { "RS256" };                 // Default: RS256
-    options.TokenTypes = new[] { "JWT" };                          // Default: JWT
+    options.ValidAlgorithms = new[] { "RS256" };                           // Default: RS256
+    options.TokenTypes = new[] { "at+jwt" };                               // Default: at+jwt
+    options.IntrospectionTokenTypes = new[] { "access_token" };            // Optional
 
     // JWKS caching
-    options.JwksCacheDurationHours = 24;                           // Default: 24 hours
-    options.JwksRefreshIntervalMinutes = 5;                        // Default: 5 minutes
+    options.JwksCacheDurationHours = 24;                                   // Default: 24 hours
+    options.JwksRefreshIntervalMinutes = 5;                                // Default: 5 minutes
+    options.JwksAllowedHosts = new[] { "keys.guardhouse.cloud" };          // Optional
 
     // Introspection caching (micro-cache for burst traffic)
-    options.IntrospectionCacheTtlSeconds = 5;                     // Default: 5 seconds
+    options.IntrospectionCacheTtlSeconds = 5;                              // Default: 5 seconds
+    options.IntrospectionNegativeCacheTtlSeconds = 10;                     // Default: 10 seconds
 
-    // HTTPS metadata
-    options.RequireHttpsMetadata = true;                            // Default: derived from authority
+    // HTTPS and metadata
+    options.RequireHttps = true;                                           // Default: true
+    options.RequireHttpsMetadata = null;                                   // Default: derived from authority
+    options.SaveToken = false;                                             // Default: false
+
+    options.RequestTimeoutSeconds = 30;                                    // Default: 30
+    options.MaxRetryAttempts = 3;                                          // Default: 3
+    options.EnableDebug = false;                                           // Default: false
 });
 ```
 
@@ -206,39 +220,29 @@ builder.Services.AddGuardhouseResource(options =>
 
 ✅ **Automatic Token Caching** - Tokens cached in memory with configurable expiration buffer
 
-✅ **Automatic Token Refresh** - Seamless token renewal using refresh tokens
+✅ **Automatic Token Refresh** - Uses refresh tokens when available
 
-✅ **HTTP Resilience** - Built-in retry policies with exponential backoff
+✅ **HTTP Resilience** - Retry and timeout policies with Polly
 
-✅ **Introspection Support** - RFC 7662 token introspection for resource servers
+✅ **Client Introspection** - Optional RFC 7662 introspection for debugging
 
-### Security
+### Resource Server Validation
 
-✅ **Strict Algorithm Enforcement** - Only RS256 allowed (prevents algorithm confusion)
+✅ **JWT Signature Validation** - JWKS discovery with lazy refresh on unknown keys
 
-✅ **Token Type Validation** - Validates typ header to prevent type confusion
+✅ **Introspection Mode** - RFC 7662 validation with micro-cache and negative cache
 
-✅ **Comprehensive Validation** - Validates issuer, audience, lifetime, and signature
+✅ **Configurable Validation Rules** - Issuer, audience, lifetime, algorithms, token types
 
-✅ **JWKS with Lazy Refresh** - Automatic refresh on unknown keys with rate limiting
-
-✅ **Embedded Key Protection** - Prevents embedded key attacks
-
-✅ **Key ID Injection Protection** - Prevents path traversal in kid injection
-
-✅ **Psychic Signature Protection** - Library validates ECDSA signatures correctly
-
-✅ **None Algorithm Prevention** - Rejects "none" algorithm tokens
+✅ **Backchannel Hardening** - Allowed hosts and HTTPS enforcement for metadata/JWKS
 
 ### Developer Experience
 
 ✅ **Configuration Validation** - Fails fast at startup for missing required settings
 
-✅ **Clear Error Messages** - Helpful messages for introspection credentials
+✅ **Dependency Injection** - AddGuardhouseClient, AddGuardhouseResource, AddGuardhouse
 
-✅ **Dependency Injection** - Full .NET DI support with extension methods
-
-✅ **Logging Integration** - Built-in logging for debugging and monitoring
+✅ **Logging Integration** - Debug logging for token and JWKS diagnostics
 
 ## API Reference
 
@@ -271,27 +275,22 @@ public interface IGuardhouseResourceService
 ### Validation Modes
 
 **JWT Signature Mode** (Default):
-- Uses JWKS endpoint for token validation
-- Automatic key rotation support with lazy refresh
+- Uses OpenID configuration and JWKS for token validation
+- Automatic key rotation support with lazy refresh on unknown kid
 - Validates signature, issuer, audience, lifetime, algorithm, token type
 
 **Introspection Mode** (RFC 7662):
 - Validates tokens via Guardhouse introspection endpoint
 - Client credentials required for introspection calls
-- Micro-cache (5 seconds) for burst traffic handling
+- Micro-cache for burst traffic handling with positive/negative TTLs
 
-### Protected Attack Vectors
+### Validation Checks
 
-1. ✅ Validates everything (signature, audience, issuer, lifetime, algorithm, type)
-2. ✅ Strict RS256 enforcement prevents algorithm confusion
-3. ✅ Issuer/audience validation prevents confused deputy attacks
-4. ✅ JWKS library handles embedded key attacks
-5. ✅ Valid algorithms list prevents algorithm confusion
-6. ✅ "none" algorithm prevention
-7. ✅ No fallback between validation methods
-8. ✅ Token type (typ) validation prevents type confusion
-9. ✅ Library prevents key ID injection (path traversal)
-10. ✅ Library validates ECDSA/psychic signatures correctly
+- Algorithm allowlist with explicit rejection of "none"
+- Token type allowlist (default: `at+jwt`)
+- Issuer and audience validation with normalized issuer matching
+- Lifetime validation with clock skew
+- HTTPS requirement and allowed host checks for metadata/JWKS/introspection
 
 ### JWKS Caching with Lazy Refresh
 
@@ -300,22 +299,20 @@ The SDK implements "Lazy Refresh on Unknown Key" strategy:
 1. Extract `kid` (Key ID) from incoming JWT token header
 2. Check local cache for key
 3. If key exists: Validate signature (fast path)
-4. If key missing: Trigger JWKS refresh from `/.well-known/jwks.json`
-5. Rate limit refresh (configurable, default 5 minutes)
-6. Re-check cache and validate with new keys
+4. If key missing: Trigger JWKS refresh via discovery or `/.well-known/jwks`
+5. Re-check cache and validate with new keys
 
-This ensures your API accepts valid tokens even after key rotation, while protecting against DoS attacks via rate limiting.
+This ensures your API accepts valid tokens even after key rotation, while using configurable cache and refresh intervals for regular refresh behavior.
 
 ### Introspection Micro-Cache Strategy
 
 The SDK implements a micro-cache for introspection results:
 
-- **Default TTL**: 5 seconds
-- **Purpose**: Handles burst traffic (e.g., page loads with multiple API calls)
-- **Security**: Maintains near-real-time revocation security by rapidly refreshing
-- **Trade-off**: Minimal delay (5 seconds) vs. significant performance improvement for burst scenarios
+- **Active TTL**: 5 seconds (default)
+- **Inactive TTL**: 10 seconds (default)
+- **Purpose**: Handles burst traffic while keeping revocation checks near real-time
 
-Use introspection mode when you need real-time token revocation checking, but be aware of the network request overhead.
+Use introspection mode when you need real-time revocation checking, and tune TTLs to balance freshness and throughput.
 
 ## Examples
 
@@ -481,4 +478,4 @@ Licensed under Apache License 2.0
 
 - Guardhouse Cloud: https://guardhouse.cloud
 - Documentation: https://docs.guardhouse.cloud
-- GitHub Repository: https://github.com/guardhouse/guardhouse-sdk-dotnet
+- GitHub Repository: https://github.com/legiosoft/guardhouse-sdk-dotnet
