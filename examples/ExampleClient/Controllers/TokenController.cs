@@ -3,7 +3,7 @@ using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
-using System.IdentityModel.Tokens.Jwt;
+using ExampleClient.Utilities;
 
 namespace ExampleClient.Controllers;
 
@@ -22,35 +22,13 @@ public class TokenController : ControllerBase
         _environment = environment;
     }
 
-    private string? GetScopeFromToken(string token)
-    {
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-            
-            var scopeClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "scope");
-            if (scopeClaim != null)
-            {
-                return scopeClaim.Value;
-            }
-            
-            var scpClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "scp");
-            return scpClaim?.Value;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     [HttpGet("current")]
     public async Task<ActionResult> GetCurrentToken()
     {
         try
         {
             var tokenResponse = await _tokenService.RequestTokenAsync();
-            var scopeFromToken = GetScopeFromToken(tokenResponse.AccessToken);
+            var scopeFromToken = tokenResponse.AccessToken.GetTokenScope();
 
             return Ok(new
             {
@@ -78,7 +56,7 @@ public class TokenController : ControllerBase
         try
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
-            var scopeFromToken = GetScopeFromToken(accessToken);
+            var scopeFromToken = accessToken.GetTokenScope();
 
             return Ok(new
             {

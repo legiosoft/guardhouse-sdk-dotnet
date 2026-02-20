@@ -1,6 +1,7 @@
 using ExampleResource.Services;
+using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Extensions;
-using Guardhouse.SDK.Models;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,39 +9,20 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddAuthentication(GuardhouseConstants.Authentication.DefaultScheme);
+
 builder.Services.AddGuardhouseResource(options =>
 {
-    options.Authority = builder.Configuration["Guardhouse:Authority"]!;
-    options.Audience = builder.Configuration["Guardhouse:Audience"]!;
-    
-    options.ValidationMode = builder.Configuration["Guardhouse:ValidationMode"] == "Introspection" 
-        ? TokenValidationMode.Introspection 
-        : TokenValidationMode.JwtSignature;
-    
-    if (options.ValidationMode == TokenValidationMode.Introspection)
-    {
-        options.IntrospectionClientId = builder.Configuration["Guardhouse:IntrospectionClientId"]!;
-        options.IntrospectionClientSecret = builder.Configuration["Guardhouse:IntrospectionClientSecret"]!;
-    }
-    
-    options.ValidateIssuer = true;
-    options.ValidateAudience = true;
-    options.ValidateLifetime = true;
-    options.ValidAlgorithms = ["RS256"];
-    options.JwksCacheDurationHours = 24;
-    options.JwksRefreshIntervalMinutes = 5;
+    builder.Configuration.GetSection("Guardhouse").Bind(options);
 });
 
 builder.Services.AddAuthorization(options =>
 {
-    // options.AddPolicy("ReadScope", policy =>
-    //     policy.RequireClaim("scope", "read"));
-    //
-    // options.AddPolicy("WriteScope", policy =>
-    //     policy.RequireClaim("scope", "write"));
-    //
-    // options.AddPolicy("AdminRole", policy =>
-    //     policy.RequireRole("admin"));
+    options.AddPolicy("WriteScope", policy =>
+        policy.RequireAssertion(context => HasScope(context.User, "write")));
+
+    options.AddPolicy("AdminRole", policy =>
+        policy.RequireRole("admin"));
 });
 
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -64,3 +46,17 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static bool HasScope(ClaimsPrincipal user, string requiredScope)
+{
+    if (string.IsNullOrWhiteSpace(requiredScope))
+    {
+        return false;
+    }
+
+    var scopes = user.Claims
+        .Where(claim => claim.Type == GuardhouseConstants.JwtClaims.Scope || claim.Type == "scp")
+        .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    return scopes.Any(scope => string.Equals(scope, requiredScope, StringComparison.OrdinalIgnoreCase));
+}

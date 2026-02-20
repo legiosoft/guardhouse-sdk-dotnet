@@ -1,5 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using ExampleClient.DTOs;
+using ExampleClient.Utilities;
 using ExampleClient.Services;
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Services;
@@ -22,21 +22,6 @@ public class ProductsController : ControllerBase
         _logger = logger;
     }
 
-    private string? GetScopeFromToken(string token)
-    {
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-            return jwtToken.Claims.FirstOrDefault(c => c.Type == "scope")?.Value 
-                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == "scp")?.Value;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     [HttpGet]
     public async Task<ActionResult> GetAll()
     {
@@ -44,7 +29,7 @@ public class ProductsController : ControllerBase
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
             var products = await _productService.GetAll();
-            var scope = GetScopeFromToken(accessToken);
+            var scope = accessToken.GetTokenScope();
 
             return Ok(new
             {
@@ -73,7 +58,7 @@ public class ProductsController : ControllerBase
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
             var product = await _productService.GetById(id);
-            var scope = GetScopeFromToken(accessToken);
+            var scope = accessToken.GetTokenScope();
 
             if (product == null)
             {
@@ -107,7 +92,7 @@ public class ProductsController : ControllerBase
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
             var newProduct = await _productService.Create(request);
-            var scope = GetScopeFromToken(accessToken);
+            var scope = accessToken.GetTokenScope();
 
             return CreatedAtAction(nameof(GetById), new { id = newProduct.Id }, new
             {
@@ -136,7 +121,7 @@ public class ProductsController : ControllerBase
         {
             var accessToken = await _tokenService.GetAccessTokenAsync();
             var product = await _productService.GetById(id);
-            var scope = GetScopeFromToken(accessToken);
+            var scope = accessToken.GetTokenScope();
             
             if (product == null)
             {

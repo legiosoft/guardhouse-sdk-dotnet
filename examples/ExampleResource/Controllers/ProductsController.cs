@@ -21,6 +21,7 @@ public class ProductsController : ControllerBase
     [HttpGet]
     public ActionResult<IEnumerable<Product>> GetAll()
     {
+        var contextAuth = HttpContext;
         return Ok(new
         {
             Products = _productService.GetAll(),

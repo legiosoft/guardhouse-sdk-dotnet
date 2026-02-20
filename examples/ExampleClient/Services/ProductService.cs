@@ -1,6 +1,6 @@
 using ExampleClient.DTOs;
 using Guardhouse.SDK.Services;
-using System.Text.Json;
+using System.Net.Http.Json;
 
 namespace ExampleClient.Services;
 
@@ -9,7 +9,6 @@ public class Product
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
-    public string? Description { get; set; }
 }
 
 public interface IProductService
@@ -24,16 +23,14 @@ public interface IProductService
 public class ProductService : IProductService
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
     private readonly IGuardhouseTokenService _tokenService;
-
-    private string ResourceServerUrl => _configuration["ResourceServer:BaseUrl"]!;
+    private readonly string _resourceServerUrl;
 
     public ProductService(IHttpClientFactory httpClientFactory, IConfiguration configuration, IGuardhouseTokenService tokenService)
     {
         _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
         _tokenService = tokenService;
+        _resourceServerUrl = GetResourceServerUrl(configuration);
     }
 
     private async Task<HttpClient> CreateAuthenticatedClientAsync()
@@ -48,83 +45,36 @@ public class ProductService : IProductService
     public async Task<IEnumerable<Product>> GetAll()
     {
         var client = await CreateAuthenticatedClientAsync();
-        var response = await client.GetAsync($"{ResourceServerUrl}/api/products");
-        response.EnsureSuccessStatusCode();
-        
-        var json = await response.Content.ReadAsStringAsync();
-        var document = JsonDocument.Parse(json);
-        
-        if (document.RootElement.TryGetProperty("products", out var productsElement))
-        {
-            var products = new List<Product>();
-            foreach (var item in productsElement.EnumerateArray())
-            {
-                products.Add(new Product
-                {
-                    Id = item.GetProperty("id").GetInt32(),
-                    Name = item.GetProperty("name").GetString() ?? string.Empty,
-                    Price = item.GetProperty("price").GetDecimal(),
-                    Description = item.TryGetProperty("description", out var desc) ? desc.GetString() : null
-                });
-            }
-            return products;
-        }
-        
-        return new List<Product>();
+        var response = await client.GetFromJsonAsync<ProductsResponse>($"{_resourceServerUrl}/api/products");
+        return response?.Products ?? [];
     }
 
     public async Task<Product?> GetById(int id)
     {
         var client = await CreateAuthenticatedClientAsync();
-        var response = await client.GetAsync($"{ResourceServerUrl}/api/products/{id}");
+        using var response = await client.GetAsync($"{_resourceServerUrl}/api/products/{id}");
         
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
         
         response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
-        var document = JsonDocument.Parse(json);
-        
-        if (document.RootElement.TryGetProperty("product", out var productElement))
-        {
-            return new Product
-            {
-                Id = productElement.GetProperty("id").GetInt32(),
-                Name = productElement.GetProperty("name").GetString() ?? string.Empty,
-                Price = productElement.GetProperty("price").GetDecimal(),
-                Description = productElement.TryGetProperty("description", out var desc) ? desc.GetString() : null
-            };
-        }
-        
-        return null;
+        var payload = await response.Content.ReadFromJsonAsync<ProductResponse>();
+        return payload?.Product;
     }
 
     public async Task<Product> Create(CreateProductRequest request)
     {
         var client = await CreateAuthenticatedClientAsync();
-        var response = await client.PostAsJsonAsync($"{ResourceServerUrl}/api/products", request);
+        using var response = await client.PostAsJsonAsync($"{_resourceServerUrl}/api/products", request);
         response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
-        var document = JsonDocument.Parse(json);
-        
-        if (document.RootElement.TryGetProperty("product", out var productElement))
-        {
-            return new Product
-            {
-                Id = productElement.GetProperty("id").GetInt32(),
-                Name = productElement.GetProperty("name").GetString() ?? string.Empty,
-                Price = productElement.GetProperty("price").GetDecimal(),
-                Description = productElement.TryGetProperty("description", out var desc) ? desc.GetString() : null
-            };
-        }
-        
-        throw new InvalidOperationException("Failed to create product");
+        var payload = await response.Content.ReadFromJsonAsync<ProductResponse>();
+        return payload?.Product ?? throw new InvalidOperationException("Failed to create product");
     }
 
     public async Task<bool> Delete(int id)
     {
         var client = await CreateAuthenticatedClientAsync();
-        var response = await client.DeleteAsync($"{ResourceServerUrl}/api/products/{id}");
+        using var response = await client.DeleteAsync($"{_resourceServerUrl}/api/products/{id}");
         
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return false;
@@ -137,5 +87,31 @@ public class ProductService : IProductService
     {
         var products = await GetAll();
         return products.Count();
+    }
+
+    private static string GetResourceServerUrl(IConfiguration configuration)
+    {
+        var resourceServerUrl = configuration["ResourceServer:BaseUrl"]?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(resourceServerUrl))
+        {
+            throw new InvalidOperationException("ResourceServer:BaseUrl is required.");
+        }
+
+        if (!Uri.TryCreate(resourceServerUrl, UriKind.Absolute, out _))
+        {
+            throw new InvalidOperationException("ResourceServer:BaseUrl must be an absolute URL.");
+        }
+
+        return resourceServerUrl;
+    }
+
+    private sealed class ProductsResponse
+    {
+        public List<Product> Products { get; set; } = [];
+    }
+
+    private sealed class ProductResponse
+    {
+        public Product? Product { get; set; }
     }
 }
