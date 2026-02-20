@@ -5,7 +5,7 @@ public static class GuardhouseConstants
     public static class Endpoints
     {
         public const string WellKnownOpenIdConfiguration = ".well-known/openid-configuration";
-        public const string WellKnownJwks = ".well-known/jwks.json";
+        public const string WellKnownJwks = ".well-known/jwks";
         public const string ConnectToken = "connect/token";
         public const string ConnectIntrospect = "connect/introspect";
         public const string ConnectAuthorize = "connect/authorize";
