@@ -8,31 +8,29 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.0-beta18</Version>
+        <Version>1.0.0</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
         <Copyright>Copyright (c) LEGIOSOFT SOLUTIONS S.L. 2026</Copyright>
         <Description>
-            Official .NET SDK for Guardhouse Cloud platform. Comprehensive authentication and authorization library supporting JWT signature validation (RFC 7515), token introspection (RFC 7662), and client credentials flow. Features include JWKS caching with lazy refresh, HTTP resilience with Polly, and protection against 10+ JWT security attack vectors including algorithm confusion, embedded key attacks, and psychic signature protection. Supports .NET 6.0 through .NET 10.0.
+            Official .NET SDK for Guardhouse Cloud. Provides client credentials flow, JWT signature validation (RFC 7515), and token introspection (RFC 7662). Includes JWKS caching with lazy refresh, configurable validation rules, and HTTP resilience with Polly. Supports .NET 6.0 through .NET 10.0.
         </Description>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <PackageProjectUrl>https://guardhouse.cloud</PackageProjectUrl>
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.0-beta18 - beta release of Guardhouse SDK for .NET.
+            1.0.0 - stable release of Guardhouse SDK for .NET.
 
             Features:
+            - Client credentials flow with token caching and refresh support
             - JWT signature validation with JWKS caching and lazy refresh (RFC 7515)
-            - Token introspection support (RFC 7662)
-            - Comprehensive security validations (algorithm, token type, issuer, audience, lifetime)
-            - Configurable validation modes (JWT Signature or Introspection)
-            - Client credentials flow support with automatic token refresh
-            - HTTP resilience and retry policies with Polly
-            - Configuration validation with clear error messages
+            - Token introspection support (RFC 7662) with micro-cache
+            - Configurable validation rules (issuer, audience, lifetime, algorithms, token types)
+            - HTTP resilience with Polly retry and timeout policies
+            - Clear configuration validation and diagnostics
             - Support for .NET 6.0, 7.0, 8.0, 9.0, and 10.0
-            - Protection against 10+ JWT security attack vectors
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly</PackageTags>
 
