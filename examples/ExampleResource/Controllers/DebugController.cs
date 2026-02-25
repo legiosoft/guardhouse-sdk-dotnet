@@ -1,7 +1,6 @@
-using ExampleResource.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
+using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace ExampleResource.Controllers;
@@ -144,9 +143,28 @@ public class DebugController : ControllerBase
             IsAuthenticated = isAuthenticated,
             AuthenticationType = User.Identity?.AuthenticationType,
             Name = User.Identity?.Name,
-            Scopes = ClaimsParsingHelper.GetScopes(User),
-            Roles = ClaimsParsingHelper.GetRoles(User),
-            ParsedClaims = ClaimsParsingHelper.GetParsedClaims(User),
+            Scopes = User.FindAll("scope")
+                .Concat(User.FindAll("scp"))
+                .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            Roles = User.FindAll(ClaimTypes.Role)
+                .Concat(User.FindAll("role"))
+                .Concat(User.FindAll("roles"))
+                .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            ParsedClaims = User.Claims
+                .GroupBy(claim => claim.Type, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    Type = group.Key,
+                    Values = group.Select(claim => claim.Value)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                })
+                .OrderBy(claim => claim.Type, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Claims = claims
         });
     }

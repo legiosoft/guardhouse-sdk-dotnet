@@ -4,6 +4,7 @@ using ExampleResource.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Guardhouse.SDK.Constants;
 
 namespace ExampleResource.Controllers;
 
@@ -21,7 +22,6 @@ public class ProductsController : ControllerBase
     [HttpGet]
     public ActionResult<IEnumerable<Product>> GetAll()
     {
-        var contextAuth = HttpContext;
         return Ok(new
         {
             Products = _productService.GetAll(),
@@ -45,13 +45,17 @@ public class ProductsController : ControllerBase
             Product = product,
             User = User.Identity?.Name,
             Subject = User.FindFirst("sub")?.Value,
-            Scopes = User.FindAll("scope").Select(c => c.Value).ToList(),
+            Scopes = User.FindAll("scope")
+                .Concat(User.FindAll("scp"))
+                .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Message = "Product retrieved successfully (protected endpoint)"
         });
     }
 
     [HttpPost]
-    [Authorize(Policy = "WriteScope")]
+    [Authorize(Policy = AuthorizationConsts.Policies.SA)]
     public ActionResult<Product> Create([FromBody] CreateProductRequest request)
     {
         var newProduct = _productService.Create(request);
@@ -61,13 +65,17 @@ public class ProductsController : ControllerBase
             Product = newProduct,
             User = User.Identity?.Name,
             Subject = User.FindFirst("sub")?.Value,
-            Scopes = User.FindAll("scope").Select(c => c.Value).ToList(),
+            Scopes = User.FindAll("scope")
+                .Concat(User.FindAll("scp"))
+                .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Message = "Product created successfully (protected endpoint)"
         });
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminRole")]
+    [Authorize(Policy = AuthorizationConsts.Policies.SA)]
     public ActionResult Delete(int id)
     {
         var product = _productService.GetById(id);
@@ -83,7 +91,12 @@ public class ProductsController : ControllerBase
             Message = $"Product '{product.Name}' deleted successfully (admin only)",
             User = User.Identity?.Name,
             Subject = User.FindFirst("sub")?.Value,
-            Roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
+            Roles = User.FindAll(ClaimTypes.Role)
+                .Concat(User.FindAll("role"))
+                .Concat(User.FindAll("roles"))
+                .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             RemainingProducts = _productService.Count()
         });
     }
