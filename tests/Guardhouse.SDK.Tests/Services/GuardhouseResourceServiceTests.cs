@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using FluentAssertions;
 using Guardhouse.SDK.Constants;
@@ -81,6 +84,30 @@ public class GuardhouseResourceServiceTests
 
         principal.Should().NotBeNull();
         principal!.FindFirst(GuardhouseConstants.JwtClaims.Subject)?.Value.Should().Be("user");
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_WithCustomIntrospectionClaims_ShouldMapToPrincipal()
+    {
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("test_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                AdditionalClaims = new Dictionary<string, JsonElement>
+                {
+                    ["system"] = ParseJsonElement("\"system_administrator\""),
+                    ["business"] = ParseJsonElement("[\"retail\",\"wholesale\"]")
+                }
+            });
+
+        var principal = await _service.ValidateTokenAsync("test_token");
+
+        principal.Should().NotBeNull();
+        principal!.FindFirst("system")?.Value.Should().Be("system_administrator");
+        principal.FindAll("business").Select(claim => claim.Value)
+            .Should().BeEquivalentTo("retail", "wholesale");
     }
 
     [Fact]
@@ -179,4 +206,10 @@ public class GuardhouseResourceServiceTests
     }
 
     #endregion
+
+    private static JsonElement ParseJsonElement(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
 }

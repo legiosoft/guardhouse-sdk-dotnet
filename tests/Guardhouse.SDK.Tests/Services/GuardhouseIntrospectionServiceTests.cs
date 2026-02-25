@@ -87,13 +87,18 @@ public class GuardhouseIntrospectionServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldSendBasicAuthHeader()
+    public async Task IntrospectTokenAsync_ShouldUseFormDataCredentials_ByDefault()
     {
         HttpRequestMessage? sentRequest = null;
+        string? formData = null;
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                sentRequest = req;
+                formData = await req.Content!.ReadAsStringAsync();
+            })
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
@@ -104,8 +109,10 @@ public class GuardhouseIntrospectionServiceTests
         await service.IntrospectTokenAsync("test_token");
 
         sentRequest.Should().NotBeNull();
-        sentRequest!.Headers.Authorization.Should().NotBeNull();
-        sentRequest.Headers.Authorization!.Scheme.Should().Be("Basic");
+        sentRequest!.Headers.Authorization.Should().BeNull();
+        formData.Should().Contain("client_id=test-client");
+        formData.Should().Contain("client_secret=test-secret");
+        formData.Should().Contain("token=test_token");
     }
 
     [Fact]
@@ -181,6 +188,42 @@ public class GuardhouseIntrospectionServiceTests
     }
 
     [Fact]
+    public async Task IntrospectTokenAsync_ShouldRespectConfiguredRequestTimeout()
+    {
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Returns<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                return new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent(JsonSerializer.Serialize(new IntrospectionResponse { Active = true }))
+                };
+            });
+
+        var options = Options.Create(new GuardhouseResourceOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            Audience = "test-audience",
+            ValidationMode = TokenValidationMode.Introspection,
+            IntrospectionClientId = "test-client",
+            IntrospectionClientSecret = "test-secret",
+            RequestTimeoutSeconds = 1
+        });
+
+        var service = new GuardhouseIntrospectionService(
+            _httpClient,
+            _memoryCache,
+            options,
+            _mockLogger.Object);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => service.IntrospectTokenAsync("test_token"));
+        exception.Message.Should().Contain("1 seconds");
+    }
+
+    [Fact]
     public async Task IntrospectTokenAsync_WhenDeserializationFails_ShouldThrowJsonException()
     {
         _mockHttpMessageHandler
@@ -215,19 +258,14 @@ public class GuardhouseIntrospectionServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldSendFormDataCredentials_WhenConfigured()
+    public async Task IntrospectTokenAsync_ShouldSendBasicAuthHeader_WhenConfigured()
     {
         HttpRequestMessage? sentRequest = null;
-        string? formData = null;
 
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
-            {
-                sentRequest = req;
-                formData = await req.Content!.ReadAsStringAsync();
-            })
+            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
@@ -241,7 +279,7 @@ public class GuardhouseIntrospectionServiceTests
             ValidationMode = TokenValidationMode.Introspection,
             IntrospectionClientId = "test-client",
             IntrospectionClientSecret = "test-secret",
-            IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData
+            IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth
         });
 
         var service = new GuardhouseIntrospectionService(
@@ -253,12 +291,8 @@ public class GuardhouseIntrospectionServiceTests
         await service.IntrospectTokenAsync("test_token");
 
         sentRequest.Should().NotBeNull();
-        sentRequest!.Headers.Authorization.Should().BeNull();
-
-        formData.Should().NotBeNull();
-        formData.Should().Contain("client_id=test-client");
-        formData.Should().Contain("client_secret=test-secret");
-        formData.Should().Contain("token=test_token");
+        sentRequest!.Headers.Authorization.Should().NotBeNull();
+        sentRequest.Headers.Authorization!.Scheme.Should().Be("Basic");
     }
 
     [Fact]

@@ -424,13 +424,18 @@ public class GuardhouseTokenServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldUseBasicAuthentication()
+    public async Task IntrospectTokenAsync_ShouldUseFormDataCredentials_ByDefault()
     {
         HttpRequestMessage? sentRequest = null;
+        string? formData = null;
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
+            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
+            {
+                sentRequest = req;
+                formData = await req.Content!.ReadAsStringAsync();
+            })
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
@@ -441,14 +446,15 @@ public class GuardhouseTokenServiceTests
         await tokenService.IntrospectTokenAsync("test_token");
 
         sentRequest.Should().NotBeNull();
-        sentRequest!.Headers.Authorization.Should().NotBeNull();
-        sentRequest.Headers.Authorization!.Scheme.Should().Be("Basic");
-        var expectedCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("test-client:test-secret"));
-        sentRequest.Headers.Authorization.Parameter.Should().Be(expectedCredentials);
+        sentRequest!.Headers.Authorization.Should().BeNull();
+        formData.Should().NotBeNull();
+        formData.Should().Contain("client_id=test-client");
+        formData.Should().Contain("client_secret=test-secret");
+        formData.Should().Contain("token=test_token");
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldNotIncludeCredentialsInFormBody()
+    public async Task IntrospectTokenAsync_ShouldIncludeCredentialsInFormBody_ByDefault()
     {
         string? contentData = null;
         _mockHttpMessageHandler
@@ -468,8 +474,8 @@ public class GuardhouseTokenServiceTests
         await tokenService.IntrospectTokenAsync("test_token");
 
         contentData.Should().NotBeNull();
-        contentData.Should().NotContain("client_id");
-        contentData.Should().NotContain("client_secret");
+        contentData.Should().Contain("client_id=test-client");
+        contentData.Should().Contain("client_secret=test-secret");
         contentData.Should().Contain("token=test_token");
     }
 
@@ -506,19 +512,13 @@ public class GuardhouseTokenServiceTests
     }
 
     [Fact]
-    public async Task IntrospectTokenAsync_ShouldSendFormDataCredentials_WhenConfigured()
+    public async Task IntrospectTokenAsync_ShouldUseBasicAuthentication_WhenConfigured()
     {
         HttpRequestMessage? sentRequest = null;
-        string? formData = null;
-
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, ct) =>
-            {
-                sentRequest = req;
-                formData = await req.Content!.ReadAsStringAsync();
-            })
+            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => sentRequest = req)
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
@@ -531,7 +531,7 @@ public class GuardhouseTokenServiceTests
             ClientId = "test-client",
             ClientSecret = "test-secret",
             Scope = "api",
-            IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData
+            IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth
         };
         var optionsWrapper = Options.Create(options);
 
@@ -545,12 +545,10 @@ public class GuardhouseTokenServiceTests
         await tokenService.IntrospectTokenAsync("test_token");
 
         sentRequest.Should().NotBeNull();
-        sentRequest!.Headers.Authorization.Should().BeNull();
-
-        formData.Should().NotBeNull();
-        formData.Should().Contain("client_id=test-client");
-        formData.Should().Contain("client_secret=test-secret");
-        formData.Should().Contain("token=test_token");
+        sentRequest!.Headers.Authorization.Should().NotBeNull();
+        sentRequest.Headers.Authorization!.Scheme.Should().Be("Basic");
+        var expectedCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("test-client:test-secret"));
+        sentRequest.Headers.Authorization.Parameter.Should().Be(expectedCredentials);
     }
 
     [Fact]

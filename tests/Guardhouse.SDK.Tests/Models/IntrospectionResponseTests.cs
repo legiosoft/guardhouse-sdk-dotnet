@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using NodaTime;
 using NodaTime.Testing;
@@ -132,8 +133,34 @@ public class IntrospectionResponseTests
         response.Jti.Should().BeNull();
         response.Role.Should().BeNull();
         response.Roles.Should().BeNull();
+        response.AdditionalClaims.Should().BeNull();
         response.ExpiresAt.Should().BeNull();
         response.IssuedAt.Should().BeNull();
         response.NotBefore.Should().BeNull();
+    }
+
+    [Fact]
+    public void AdditionalClaims_ShouldCaptureUnknownIntrospectionFields()
+    {
+        const string json = """
+                            {
+                              "active": true,
+                              "scope": "system_api",
+                              "system": "system_administrator",
+                              "business": ["retail", "wholesale"]
+                            }
+                            """;
+
+        var response = JsonSerializer.Deserialize<IntrospectionResponse>(json);
+
+        response.Should().NotBeNull();
+        var additionalClaims = response!.AdditionalClaims;
+        additionalClaims.Should().NotBeNull();
+
+        var claims = additionalClaims!;
+        claims.Should().ContainKey("system");
+        claims.Should().ContainKey("business");
+        claims["system"].GetString().Should().Be("system_administrator");
+        claims["business"].ValueKind.Should().Be(JsonValueKind.Array);
     }
 }

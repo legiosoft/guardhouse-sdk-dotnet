@@ -1,9 +1,14 @@
+using System.Collections.Concurrent;
 using FluentAssertions;
+using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Models.Validation;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -128,6 +133,36 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddGuardhouseResource_WithIntrospectionClientIdDifferentFromAudience_ShouldLogWarning()
+    {
+        var services = new ServiceCollection();
+        var logSink = new TestLogSink();
+        services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(logSink)));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+
+        services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "resource-api";
+            options.ValidationMode = TokenValidationMode.Introspection;
+            options.IntrospectionClientId = "introspection-client";
+            options.IntrospectionClientSecret = "introspection-secret";
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var jwtOptionsMonitor = serviceProvider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>();
+        _ = jwtOptionsMonitor.Get(GuardhouseConstants.Authentication.DefaultScheme);
+
+        logSink.Entries.Should().Contain(entry =>
+            entry.LogLevel == LogLevel.Warning &&
+            entry.Message.Contains("IntrospectionClientId", StringComparison.Ordinal) &&
+            entry.Message.Contains("Audience", StringComparison.Ordinal) &&
+            entry.Message.Contains("resource-api", StringComparison.Ordinal) &&
+            entry.Message.Contains("introspection-client", StringComparison.Ordinal) &&
+            entry.Message.Contains("may not work", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void AddGuardhouseResource_WithJwtSignatureMode_ShouldNotRequireIntrospectionCredentials()
     {
         var services = new ServiceCollection();
@@ -167,5 +202,56 @@ public class ServiceCollectionExtensionsTests
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseResourceService));
+    }
+
+    private sealed record LogEntry(LogLevel LogLevel, string Message);
+
+    private sealed class TestLogSink
+    {
+        public ConcurrentBag<LogEntry> Entries { get; } = new();
+    }
+
+    private sealed class TestLoggerProvider(TestLogSink logSink) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new TestLogger(logSink);
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class TestLogger(TestLogSink logSink) : ILogger
+    {
+        IDisposable ILogger.BeginScope<TState>(TState state)
+        {
+            return NullScope.Instance;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            logSink.Entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static NullScope Instance { get; } = new();
+
+            public void Dispose()
+            {
+            }
+        }
     }
 }
