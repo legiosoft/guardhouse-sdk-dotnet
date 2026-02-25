@@ -1,5 +1,7 @@
 namespace Guardhouse.SDK.Models;
 
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using NodaTime;
 
@@ -103,6 +105,12 @@ public record IntrospectionResponse
     /// </summary>
     [JsonPropertyName("role")]
     public string[]? Role { get; init; }
+
+    /// <summary>
+    /// Additional custom claims returned by the introspection endpoint.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalClaims { get; init; }
 
     /// <summary>
     /// Gets the expiration time as an Instant, or null if not available.
