@@ -1,3 +1,4 @@
+using ExampleResource.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -143,6 +144,9 @@ public class DebugController : ControllerBase
             IsAuthenticated = isAuthenticated,
             AuthenticationType = User.Identity?.AuthenticationType,
             Name = User.Identity?.Name,
+            Scopes = ClaimsParsingHelper.GetScopes(User),
+            Roles = ClaimsParsingHelper.GetRoles(User),
+            ParsedClaims = ClaimsParsingHelper.GetParsedClaims(User),
             Claims = claims
         });
     }
