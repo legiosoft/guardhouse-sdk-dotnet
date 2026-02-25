@@ -118,7 +118,9 @@ builder.Services.AddGuardhouseResource(options =>
 });
 ```
 
-If your identity server does not accept Basic Authentication for introspection, use FormData credential transmission:
+By default, the SDK sends introspection credentials as form data (`client_id` and `client_secret`).
+
+If your identity server requires HTTP Basic Authentication for introspection, set credential transmission to `BasicAuth`:
 
 ```csharp
 builder.Services.AddGuardhouseResource(options =>
@@ -128,7 +130,7 @@ builder.Services.AddGuardhouseResource(options =>
     options.ValidationMode = TokenValidationMode.Introspection;
     options.IntrospectionClientId = "your-introspection-client-id";
     options.IntrospectionClientSecret = "your-introspection-client-secret";
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth;
 });
 ```
 
@@ -160,7 +162,7 @@ builder.Services.AddGuardhouseClient(options =>
     // Introspection (optional - for debugging purposes)
     options.IntrospectionClientId = "your-introspection-client-id";      // Optional
     options.IntrospectionClientSecret = "your-introspection-client-secret"; // Optional
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData; // Default: FormData
 
     options.EnableDebug = false;                                         // Default: false
 });
@@ -181,7 +183,7 @@ builder.Services.AddGuardhouseResource(options =>
     // Required for Introspection mode
     options.IntrospectionClientId = "your-client-id";                     // Required for introspection
     options.IntrospectionClientSecret = "your-client-secret";             // Required for introspection
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth; // Default: BasicAuth
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData; // Default: FormData
 
     // Token validation settings
     options.ValidateIssuer = true;                                         // Default: true
@@ -443,17 +445,17 @@ builder.Services.AddGuardhouseResource(options =>
 
 **Error: "invalid_client" when using introspection**
 
-If your identity server rejects Basic Authentication headers, use FormData credential transmission:
+If your identity server requires Basic Authentication headers, switch to BasicAuth credential transmission:
 
 ```csharp
 builder.Services.AddGuardhouseResource(options =>
 {
     options.ValidationMode = TokenValidationMode.Introspection;
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData;
+    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth;
 });
 ```
 
-This sends `client_id` and `client_secret` as form parameters instead of HTTP Basic Authentication.
+This sends credentials in the HTTP `Authorization: Basic` header.
 
 ### JWKS Refresh Issues
 
