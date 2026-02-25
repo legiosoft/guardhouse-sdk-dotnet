@@ -4,12 +4,33 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using Constants;
 using Microsoft.IdentityModel.Tokens;
 using Models;
 
 internal static class GuardhouseIntrospectionLogic
 {
+    private static readonly HashSet<string> StandardIntrospectionClaimNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "active",
+        "scope",
+        "client_id",
+        "username",
+        "token_type",
+        "alg",
+        "sig",
+        "exp",
+        "iat",
+        "nbf",
+        "sub",
+        "aud",
+        "iss",
+        "jti",
+        "roles",
+        "role"
+    };
+
     internal static (ClaimsIdentity? Identity, string? FailureReason) BuildIdentityFromIntrospection(
         string token,
         IntrospectionResponse introspectionResult,
@@ -408,6 +429,85 @@ internal static class GuardhouseIntrospectionLogic
             claims.Add(new Claim(GuardhouseConstants.JwtClaims.JwtId, introspectionResult.Jti));
         }
 
+        AddCustomClaims(claims, introspectionResult.AdditionalClaims);
+
         return claims;
+    }
+
+    private static void AddCustomClaims(
+        List<Claim> claims,
+        IDictionary<string, JsonElement>? additionalClaims)
+    {
+        if (additionalClaims == null || additionalClaims.Count == 0)
+        {
+            return;
+        }
+
+        var existingClaims = new HashSet<Claim>(claims, ClaimTypeValueComparer.Instance);
+
+        foreach (var (claimType, claimValue) in additionalClaims)
+        {
+            if (string.IsNullOrWhiteSpace(claimType) || StandardIntrospectionClaimNames.Contains(claimType))
+            {
+                continue;
+            }
+
+            foreach (var parsedClaimValue in EnumerateClaimValues(claimValue))
+            {
+                if (string.IsNullOrWhiteSpace(parsedClaimValue))
+                {
+                    continue;
+                }
+
+                var claimToAdd = new Claim(claimType, parsedClaimValue);
+                if (existingClaims.Add(claimToAdd))
+                {
+                    claims.Add(claimToAdd);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateClaimValues(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+            {
+                var stringValue = element.GetString();
+                if (!string.IsNullOrWhiteSpace(stringValue))
+                {
+                    yield return stringValue;
+                }
+
+                break;
+            }
+            case JsonValueKind.Number:
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                yield return element.ToString();
+                break;
+
+            case JsonValueKind.Array:
+            {
+                foreach (var item in element.EnumerateArray())
+                {
+                    foreach (var itemValue in EnumerateClaimValues(item))
+                    {
+                        yield return itemValue;
+                    }
+                }
+
+                break;
+            }
+            case JsonValueKind.Object:
+                yield return element.GetRawText();
+                break;
+
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+            default:
+                break;
+        }
     }
 }
