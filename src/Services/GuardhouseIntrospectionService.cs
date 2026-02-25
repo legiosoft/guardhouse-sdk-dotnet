@@ -75,7 +75,11 @@ public class GuardhouseIntrospectionService(
             var authorityUri = EnsureAuthorityUri(resourceOptions.Authority, resourceOptions.RequireHttps);
             var introspectionEndpoint = new Uri(authorityUri, GuardhouseConstants.Endpoints.ConnectIntrospect).ToString();
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(GuardhouseConstants.Defaults.RequestTimeoutSeconds));
+            var timeoutSeconds = resourceOptions.RequestTimeoutSeconds > 0
+                ? resourceOptions.RequestTimeoutSeconds
+                : GuardhouseConstants.Defaults.RequestTimeoutSeconds;
+
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
             using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
@@ -108,10 +112,10 @@ public class GuardhouseIntrospectionService(
             {
                 response = await httpClient.SendAsync(request, combinedCts.Token);
             }
-            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                _logger.LogError("Introspection request timed out after {TimeoutSeconds} seconds", GuardhouseConstants.Defaults.RequestTimeoutSeconds);
-                throw new TimeoutException($"Introspection request timed out after {GuardhouseConstants.Defaults.RequestTimeoutSeconds} seconds.");
+                _logger.LogError("Introspection request timed out after {TimeoutSeconds} seconds", timeoutSeconds);
+                throw new TimeoutException($"Introspection request timed out after {timeoutSeconds} seconds.");
             }
             catch (HttpRequestException ex)
             {
