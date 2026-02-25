@@ -1,24 +1,27 @@
 # Example Resource Server
 
-This example demonstrates how to use Guardhouse SDK as a **Resource Server** that validates incoming tokens and protects API endpoints.
+This project shows how to use Guardhouse SDK in an ASP.NET Core Web API as a resource server.
 
-## What This Example Shows
+## What this sample includes
 
-- **Resource Server Configuration**: Setting up Guardhouse SDK to validate tokens
-- **Token Validation**: Two validation modes (JWT Signature vs Introspection)
-- **Authorization Policies**: Protecting endpoints with scopes and roles
-- **Security Claims**: Extracting user information from validated tokens
-- **Token Information**: Inspecting validated token claims
+- Guardhouse resource server setup with `AddGuardhouseResource(...)`
+- JWT signature validation (default) and introspection validation
+- Swagger UI bearer token authorization
+- Protected product endpoints
+- Custom SA policy based on claim `system=system_administrator`
+- Token introspection endpoint exposed by the resource API
+- Debug endpoints for local troubleshooting
 
 ## Prerequisites
 
-- .NET 8.0 SDK
-- Guardhouse Cloud account
-- Guardhouse Resource Server configuration (Audience, Authority)
+- .NET 8 SDK
+- Guardhouse authority URL
+- Guardhouse resource audience
+- (If using introspection) introspection client credentials
 
 ## Configuration
 
-### For JWT Signature Validation (Default)
+`Program.cs` maps `Guardhouse` settings explicitly (not full section bind).
 
 Update `appsettings.json`:
 
@@ -27,420 +30,179 @@ Update `appsettings.json`:
   "Guardhouse": {
     "Authority": "https://your-guardhouse-server.com",
     "Audience": "my_resource_api",
-    "ValidationMode": "JwtSignature"
-  }
-}
-```
-
-### For Introspection Validation (RFC 7662)
-
-Update `appsettings.json`:
-
-```json
-{
-  "Guardhouse": {
-    "Authority": "https://your-guardhouse-server.com",
-    "Audience": "my_resource_api",
-    "ValidationMode": "Introspection",
+    "ValidationMode": "JwtSignature",
     "IntrospectionClientId": "your-introspection-client-id",
-    "IntrospectionClientSecret": "your-introspection-client-secret"
+    "IntrospectionClientSecret": "your-introspection-client-secret",
+    "IntrospectionCredentialTransmission": "FormData",
+    "RequestTimeoutSeconds": 30,
+    "EnableDebug": true
   }
 }
 ```
 
-## Running the Example
+Notes:
+
+- `ValidationMode`:
+  - `JwtSignature` = local JWT validation
+  - `Introspection` = `/connect/introspect` call
+- `IntrospectionClientId` and `IntrospectionClientSecret` are required for introspection mode.
+- SDK default for introspection credentials is `FormData`.
+- In Guardhouse setups, introspection `client_id` usually should match resource `Audience`.
+
+## Run
 
 ```bash
-cd ExampleResource
-dotnet run
+cd examples/ExampleResource
+dotnet run --launch-profile https
 ```
 
-The API will be available at:
-- HTTP: `http://localhost:5002`
-- HTTPS: `https://localhost:5003`
+Default URLs for the `https` profile:
 
-## API Endpoints
+- `https://localhost:5001`
+- `http://localhost:5000`
 
-### Public Endpoints (No Token Required)
+Swagger UI:
 
-- `GET /api/products` - Get all products (public)
+- `https://localhost:5001/swagger`
 
-### Protected Endpoints (Token Required)
+## Swagger authorization
 
-- `GET /api/products/{id}` - Get a specific product (requires `read` scope)
-- `POST /api/products` - Create a new product (requires `write` scope)
-- `DELETE /api/products/{id}` - Delete a product (requires `admin` role)
+1. Open `/swagger`
+2. Click **Authorize**
+3. Enter `Bearer YOUR_ACCESS_TOKEN`
+4. Call secured endpoints
 
-### Token Information
+## API endpoints
 
-- `GET /api/tokeninfo/info` - Get information about the validated token
-- `GET /api/tokeninfo/user` - Get user claims from the validated token
-- `GET /api/tokeninfo/validate` - Validate token (returns 401 if invalid)
+### Product endpoints
 
-## Testing with cURL
+- `GET /api/products` - anonymous
+- `GET /api/products/{id}` - requires authenticated token (`[Authorize]`)
+- `POST /api/products` - requires policy `AuthorizationConsts.Policies.SA`
+- `DELETE /api/products/{id}` - requires policy `AuthorizationConsts.Policies.SA`
 
-### 1. Get All Products (Public)
+### Token endpoints
 
-```bash
-curl https://localhost:5003/api/products
-```
+- `GET /api/tokeninfo/info` - requires authenticated token
+- `GET /api/tokeninfo/user` - requires authenticated token
+- `GET /api/tokeninfo/validate` - checks for Bearer header presence (debug helper)
+- `POST /api/tokeninfo/introspect` - anonymous; resource server introspects token using configured introspection credentials
 
-### 2. Get Product by ID (Requires `read` scope)
+### Debug endpoints
 
-```bash
-curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     https://localhost:5003/api/products/1
-```
+- `GET /api/debug/config`
+- `GET /api/debug/auth-header`
+- `GET /api/debug/decode-token?token=...`
+- `GET /api/debug/user-claims` (authorized)
+- `GET /api/debug/check-expiry?token=...`
 
-### 3. Create Product (Requires `write` scope)
+## Authorization policy in this sample
 
-```bash
-curl -X POST https://localhost:5003/api/products \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"New Product","price":299.99}'
-```
-
-### 4. Delete Product (Requires `admin` role)
-
-```bash
-curl -X DELETE https://localhost:5003/api/products/1 \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-### 5. Get Token Info
-
-```bash
-curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     https://localhost:5003/api/tokeninfo/info
-```
-
-## How It Works
-
-### 1. Resource Server Setup
-
-In `Program.cs`, we configure the Guardhouse SDK as a resource server:
-
-```csharp
-builder.Services.AddGuardhouseResource(options =>
-{
-    options.Authority = "https://your-guardhouse-server.com";
-    options.Audience = "my_resource_api";
-    options.ValidationMode = TokenValidationMode.JwtSignature;
-    options.ValidateIssuer = true;
-    options.ValidateAudience = true;
-    options.ValidateLifetime = true;
-    options.ValidAlgorithms = new[] { "RS256" };
-});
-```
-
-### 2. Authentication Middleware
-
-The SDK automatically handles token validation:
-
-```csharp
-app.UseAuthentication();
-app.UseAuthorization();
-```
-
-### 3. Protecting Endpoints
-
-Use `[Authorize]` attribute or policies:
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class ProductsController : ControllerBase
-{
-    [HttpGet]
-    public ActionResult GetAll()
-    {
-        // Public endpoint
-        return Ok(_productService.GetAll());
-    }
-
-    [HttpGet("{id}")]
-    [Authorize(Policy = "ReadScope")]
-    public ActionResult GetById(int id)
-    {
-        // Protected - requires 'read' scope
-        var product = _productService.GetById(id);
-        var subject = User.FindFirst("sub")?.Value;
-        var scopes = User.FindAll("scope").Select(c => c.Value).ToList();
-        
-        return Ok(new { Product = product, Subject = subject, Scopes = scopes });
-    }
-
-    [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminRole")]
-    public ActionResult Delete(int id)
-    {
-        // Protected - requires 'admin' role
-        var user = User.Identity?.Name;
-        var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-        
-        _productService.Delete(id);
-        return Ok(new { User = user, Roles = roles });
-    }
-}
-```
-
-### 4. Authorization Policies
-
-Define policies in `Program.cs`:
+`Program.cs` defines one custom policy:
 
 ```csharp
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ReadScope", policy =>
-        policy.RequireClaim("scope", "read"));
-    
-    options.AddPolicy("WriteScope", policy =>
-        policy.RequireClaim("scope", "write"));
-    
-    options.AddPolicy("AdminRole", policy =>
-        policy.RequireRole("admin"));
+    options.AddPolicy(AuthorizationConsts.Policies.SA, policy =>
+        policy.RequireAssertion(context => IsSystemAdministrator(context.User)));
 });
-```
 
-### 5. Accessing Token Claims
-
-After authentication, access claims via `User`:
-
-```csharp
-[HttpGet("info")]
-[Authorize]
-public ActionResult GetTokenInfo()
+static bool IsSystemAdministrator(ClaimsPrincipal user)
 {
-    return Ok(new
-    {
-        Subject = User.FindFirst("sub")?.Value,
-        Issuer = User.FindFirst("iss")?.Value,
-        Audience = User.FindAll("aud").Select(c => c.Value).ToList(),
-        ExpiresAt = User.FindFirst("exp")?.Value,
-        Scopes = User.FindAll("scope").Select(c => c.Value).ToList(),
-        Roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList()
-    });
+    return user.FindAll(AuthorizationConsts.ClaimTypes.System)
+        .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Any(claimValue => string.Equals(
+            claimValue,
+            AuthorizationConsts.ClaimValues.SystemAdministrator,
+            StringComparison.OrdinalIgnoreCase));
 }
 ```
 
-## Token Validation Modes
+This aligns with identities that emit custom claims like:
 
-### JWT Signature Validation (Default)
+- claim type `system`
+- value `system_administrator`
 
-**How it works:**
-- Uses JWKS endpoint to fetch public keys
-- Validates token signature locally
-- Validates issuer, audience, lifetime, algorithm, and token type
-- Fast and scalable (no network calls per request)
+## Claims access (native APIs)
 
-**When to use:**
-- High-throughput APIs
-- Low latency requirements
-- Standard OAuth 2.0 / OpenID Connect tokens
+The sample uses native `ClaimsPrincipal` APIs (`FindAll`, `FindFirst`, LINQ over `User.Claims`).
 
-**Configuration:**
+Example scope extraction:
+
 ```csharp
-options.ValidationMode = TokenValidationMode.JwtSignature;
-options.Authority = "https://your-guardhouse-server.com";
-options.Audience = "my_resource_api";
-options.ValidAlgorithms = new[] { "RS256" };
+var scopes = User.FindAll("scope")
+    .Concat(User.FindAll("scp"))
+    .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToList();
 ```
 
-### Introspection Validation (RFC 7662)
+Example custom claim extraction:
 
-**How it works:**
-- Calls Guardhouse introspection endpoint for each request
-- Validates token via Guardhouse server
-- Supports immediate token revocation
-- Micro-caching for performance (default TTL: 30 seconds)
-
-**When to use:**
-- Need immediate token revocation
-- Token introspection requirements
-- Enhanced security controls
-
-**Configuration:**
 ```csharp
-options.ValidationMode = TokenValidationMode.Introspection;
-options.Authority = "https://your-guardhouse-server.com";
-options.Audience = "my_resource_api";
-options.IntrospectionClientId = "your-introspection-client-id";
-options.IntrospectionClientSecret = "your-introspection-client-secret";
-options.IntrospectionCacheTtlSeconds = 30; // Micro-cache TTL
+var systemClaims = User.FindAll(AuthorizationConsts.ClaimTypes.System)
+    .SelectMany(claim => claim.Value.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToList();
 ```
 
-## Security Features
+## Introspection endpoint behavior
 
-This example demonstrates the following security features:
+`POST /api/tokeninfo/introspect` accepts token either:
 
-✅ **JWT Signature Validation** - Validates token signature with RS256
-✅ **Algorithm Enforcement** - Only RS256 algorithm allowed
-✅ **Token Type Validation** - Validates `typ` header (JWT)
-✅ **Issuer/Audience Validation** - Prevents confused deputy attacks
-✅ **Lifetime Validation** - Rejects expired tokens
-✅ **JWKS Caching** - Efficient key rotation handling
-✅ **Introspection Support** - RFC 7662 token validation
-✅ **Scope-Based Access** - Protects endpoints based on scopes
-✅ **Role-Based Access** - Protects endpoints based on roles
+- from JSON body: `{ "token": "..." }`
+- or from `Authorization: Bearer ...` header
 
-## Complete Example Flow
+Response includes raw introspection fields and parsed values (`ParsedScopes`, `ParsedRoles`, `ParsedAudiences`, `ParsedClaims`).
 
-### 1. Client Requests Token
+Error responses:
+
+- `400` when token is missing
+- `502` on introspection/provider/configuration failure
+- `504` on introspection timeout
+
+## Quick cURL checks
+
+Public products:
 
 ```bash
-# From ExampleClient or using curl
-curl -X POST https://your-guardhouse-server.com/connect/token \
-     -d "client_id=your-client-id" \
-     -d "client_secret=your-client-secret" \
-     -d "grant_type=client_credentials" \
-     -d "scope=api.read api.write"
+curl https://localhost:5001/api/products
 ```
 
-### 2. Client Calls Protected API
+Authorized product by id:
 
 ```bash
 curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     https://localhost:5003/api/products/1
+  https://localhost:5001/api/products/1
 ```
 
-### 3. Resource Server Validates Token
+Create product (SA policy required):
 
-The SDK automatically:
-1. Extracts token from Authorization header
-2. Validates signature (or calls introspection)
-3. Checks issuer, audience, expiration
-4. Extracts claims for use in authorization
-5. Allows or denies access
-
-### 4. Response
-
-```json
-{
-  "product": {
-    "id": 1,
-    "name": "Laptop",
-    "price": 999.99
-  },
-  "user": "client-123",
-  "subject": "client-123",
-  "scopes": ["read", "write"],
-  "message": "Product retrieved successfully (protected endpoint)"
-}
+```bash
+curl -X POST https://localhost:5001/api/products \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"New Product","price":299.99}'
 ```
 
-## Real-World Use Cases
+Introspect token via resource API:
 
-### REST API with Scope-Based Access
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class DocumentsController : ControllerBase
-{
-    [HttpGet]
-    [Authorize(Policy = "ReadScope")]
-    public ActionResult GetAll() { }
-
-    [HttpPost]
-    [Authorize(Policy = "WriteScope")]
-    public ActionResult Create() { }
-
-    [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminRole")]
-    public ActionResult Delete(int id) { }
-}
-```
-
-### User Context from Token
-
-```csharp
-public class DocumentService
-{
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public async Task<Document> CreateDocument(CreateDocumentRequest request)
-    {
-        var httpContext = _httpContextAccessor.HttpContext;
-        var userId = httpContext.User.FindFirst("sub")?.Value;
-        var tenantId = httpContext.User.FindFirst("tenant_id")?.Value;
-        
-        var document = new Document
-        {
-            CreatedBy = userId,
-            TenantId = tenantId,
-            Name = request.Name,
-            Content = request.Content
-        };
-        
-        await _repository.AddAsync(document);
-        return document;
-    }
-}
-```
-
-### Audit Logging
-
-```csharp
-public class AuditLoggingMiddleware
-{
-    public async Task InvokeAsync(HttpContext context)
-    {
-        var user = context.User;
-        var subject = user.FindFirst("sub")?.Value;
-        var scopes = user.FindAll("scope").Select(c => c.Value).ToList();
-        
-        _logger.LogInformation("User {Subject} with scopes {Scopes} accessed {Path}", 
-            subject, string.Join(", ", scopes), context.Request.Path);
-        
-        await _next(context);
-    }
-}
+```bash
+curl -X POST https://localhost:5001/api/tokeninfo/introspect \
+  -H "Content-Type: application/json" \
+  -d '{"token":"YOUR_ACCESS_TOKEN"}'
 ```
 
 ## Troubleshooting
 
-### "401 Unauthorized" Errors
-
-- Verify the Authority URL is correct
-- Check the Audience matches your Guardhouse resource configuration
-- Ensure token hasn't expired
-- Verify token includes required scopes/roles
-- Check ValidationMode configuration
-
-### JWKS Issues (JWT Signature Mode)
-
-- Verify Guardhouse JWKS endpoint is accessible
-- Check `JwksCacheDurationHours` and `JwksRefreshIntervalMinutes`
-- Verify token's `kid` matches a key in JWKS
-- Check application logs for JWKS refresh errors
-
-### Introspection Issues (Introspection Mode)
-
-- Verify IntrospectionClientId and IntrospectionClientSecret are correct
-- Ensure introspection client is enabled in Guardhouse Cloud
-- Check introspection endpoint is accessible
-- Verify introspection cache TTL is appropriate
-
-### Policy Not Matching
-
-- Verify token includes required scopes
-- Check scope names match exactly (case-sensitive)
-- Verify role claims are in correct format
-- Use `/api/tokeninfo/info` to inspect token claims
-
-## Next Steps
-
-After running this example:
-
-1. **See ExampleClient**: Learn how to build a client that requests tokens
-2. **Configure Your Guardhouse Cloud**: Set up clients and resources
-3. **Implement Advanced Policies**: Custom policy requirements
-4. **Add Rate Limiting**: Protect against abuse
-5. **Implement Refresh Tokens**: For long-lived sessions
-
-## Support
-
-- Guardhouse SDK Documentation: https://docs.guardhouse.cloud
-- GitHub Issues: https://github.com/guardhouse/guardhouse-sdk-dotnet/issues
-- Guardhouse Cloud: https://guardhouse.cloud
+- `401 Unauthorized`:
+  - verify `Authority` and `Audience`
+  - ensure token is valid and not expired
+  - ensure required claims/policy data are present
+- Introspection timeout:
+  - verify `Guardhouse:Authority` reachability
+  - increase `Guardhouse:RequestTimeoutSeconds`
+- SA policy does not match:
+  - verify token includes `system=system_administrator`
+- Introspection mode warning about `IntrospectionClientId` vs `Audience`:
+  - in Guardhouse, these usually should match
