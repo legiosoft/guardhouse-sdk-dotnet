@@ -75,6 +75,8 @@ internal class ConfigureGuardhouseJwtOptions(
 
         if (opts.EnableIntrospection)
         {
+            WarnIfIntrospectionClientIdDiffersFromAudience(opts);
+
             options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
 
             var opaqueTokenValidator = new GuardhouseOpaqueTokenValidator(
@@ -99,6 +101,30 @@ internal class ConfigureGuardhouseJwtOptions(
         options.RefreshOnIssuerKeyNotFound = true;
         options.AutomaticRefreshInterval = TimeSpan.FromMinutes(GetRefreshIntervalMinutes(opts.JwksRefreshIntervalMinutes));
         options.BackchannelTimeout = TimeSpan.FromSeconds(GetRequestTimeoutSeconds(opts.RequestTimeoutSeconds));
+    }
+
+    private void WarnIfIntrospectionClientIdDiffersFromAudience(GuardhouseResourceOptions opts)
+    {
+        if (string.IsNullOrWhiteSpace(opts.IntrospectionClientId) ||
+            string.IsNullOrWhiteSpace(opts.Audience))
+        {
+            return;
+        }
+
+        var introspectionClientId = opts.IntrospectionClientId.Trim();
+        var audience = opts.Audience.Trim();
+
+        if (string.Equals(introspectionClientId, audience, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "Introspection is enabled, but IntrospectionClientId ('{IntrospectionClientId}') differs from Audience ('{Audience}'). " +
+            "For Guardhouse, introspection client_id usually matches the resource audience. " +
+            "Ensure these values are configured correctly, otherwise introspection may not work.",
+            introspectionClientId,
+            audience);
     }
 
     private void ConfigureBackchannel(JwtBearerOptions options, GuardhouseResourceOptions opts, Uri authorityUri)

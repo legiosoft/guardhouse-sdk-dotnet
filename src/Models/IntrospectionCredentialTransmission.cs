@@ -7,13 +7,13 @@ public enum IntrospectionCredentialTransmission
 {
     /// <summary>
     /// Send credentials using HTTP Basic Authentication in the Authorization header.
-    /// This is the default and most common approach (RFC 7662 compliant).
+    /// Use this when your identity server requires Basic Authentication.
     /// </summary>
     BasicAuth = 0,
 
     /// <summary>
     /// Send credentials as form data parameters (client_id and client_secret).
-    /// Use this if your identity server does not support Basic Authentication for introspection.
+    /// This is the SDK default for introspection credential transmission.
     /// </summary>
     FormData = 1
 }

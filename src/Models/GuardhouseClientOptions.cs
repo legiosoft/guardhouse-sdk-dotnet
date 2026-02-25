@@ -99,9 +99,9 @@ public class GuardhouseClientOptions
     public bool EnableDebug { get; set; }
 
     /// <summary>
-    /// How to send client credentials to the introspection endpoint (default: BasicAuth).
-    /// Use FormData if your identity server does not support Basic Authentication.
+    /// How to send client credentials to the introspection endpoint (default: FormData).
+    /// Set BasicAuth if your identity server requires HTTP Basic Authentication.
     /// </summary>
     public IntrospectionCredentialTransmission IntrospectionCredentialTransmission { get; set; }
-        = IntrospectionCredentialTransmission.BasicAuth;
+        = IntrospectionCredentialTransmission.FormData;
 }
