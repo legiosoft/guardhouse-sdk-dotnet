@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.0</Version>
+        <Version>1.0.1</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,16 +21,12 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.0 - stable release of Guardhouse SDK for .NET.
+            1.0.1 - patch release with introspection validation reliability fix.
 
-            Features:
-            - Client credentials flow with token caching and refresh support
-            - JWT signature validation with JWKS caching and lazy refresh (RFC 7515)
-            - Token introspection support (RFC 7662) with micro-cache
-            - Configurable validation rules (issuer, audience, lifetime, algorithms, token types)
-            - HTTP resilience with Polly retry and timeout policies
-            - Clear configuration validation and diagnostics
-            - Support for .NET 6.0, 7.0, 8.0, 9.0, and 10.0
+            Fixes:
+            - Prevent false "Algorithm '' is not allowed" rejections when introspection returns active=true without alg
+            - For JWT tokens, derive alg from JWT header when introspection alg is missing
+            - Keep algorithm allowlist enforcement (including none rejection) and add regression tests
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly</PackageTags>
 

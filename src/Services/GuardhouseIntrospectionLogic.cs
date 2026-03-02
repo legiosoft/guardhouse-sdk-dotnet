@@ -2,6 +2,7 @@ namespace Guardhouse.SDK.Services;
 
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -48,14 +49,21 @@ internal static class GuardhouseIntrospectionLogic
             return (null, $"Token type '{introspectionResult.TokenType}' is not allowed");
         }
 
-        var tokenLooksLikeJwt = LooksLikeJwt(token);
+        var algorithm = introspectionResult.Algorithm;
+        var shouldValidateAlgorithm = !string.IsNullOrWhiteSpace(algorithm);
 
-        if (tokenLooksLikeJwt || !string.IsNullOrWhiteSpace(introspectionResult.Algorithm))
+        if (!shouldValidateAlgorithm && TryReadJwtAlgorithm(token, out var jwtAlgorithm))
+        {
+            algorithm = jwtAlgorithm;
+            shouldValidateAlgorithm = true;
+        }
+
+        if (shouldValidateAlgorithm)
         {
             var validAlgorithms = GetValidAlgorithms(validationParameters, resourceOptions.ValidAlgorithms);
-            if (!IsAlgorithmAllowed(introspectionResult.Algorithm, validAlgorithms))
+            if (!IsAlgorithmAllowed(algorithm, validAlgorithms))
             {
-                return (null, $"Algorithm '{introspectionResult.Algorithm}' is not allowed");
+                return (null, $"Algorithm '{algorithm}' is not allowed");
             }
         }
 
@@ -342,6 +350,33 @@ internal static class GuardhouseIntrospectionLogic
 
         var secondDot = token.IndexOf('.', firstDot + 1);
         return secondDot > firstDot + 1 && secondDot < token.Length - 1;
+    }
+
+    private static bool TryReadJwtAlgorithm(string token, out string? algorithm)
+    {
+        algorithm = null;
+
+        if (!LooksLikeJwt(token))
+        {
+            return false;
+        }
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        if (!tokenHandler.CanReadToken(token))
+        {
+            return false;
+        }
+
+        try
+        {
+            var jwtToken = tokenHandler.ReadJwtToken(token);
+            algorithm = jwtToken.Header.Alg;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string NormalizeIssuer(string issuer)

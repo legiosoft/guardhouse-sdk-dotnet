@@ -190,6 +190,48 @@ public class GuardhouseJwtBearerEventsTests
     }
 
     [Fact]
+    public async Task TokenValidated_WithJwtTokenAndMissingIntrospectionAlgorithm_ShouldUseJwtHeaderAlgorithm()
+    {
+        var token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl";
+        var context = CreateTokenValidatedContext(token: token);
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(token, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user123"
+            });
+
+        await _events.TokenValidated(context);
+
+        context.Result.Should().BeNull();
+        context.Principal.Should().NotBeNull();
+        context.Principal?.FindFirst("sub")?.Value.Should().Be("user123");
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithOpaqueTokenContainingDotsAndMissingAlgorithm_ShouldSucceed()
+    {
+        var token = "opaque.token.value";
+        var context = CreateTokenValidatedContext(token: token);
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync(token, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user123"
+            });
+
+        await _events.TokenValidated(context);
+
+        context.Result.Should().BeNull();
+        context.Principal.Should().NotBeNull();
+        context.Principal?.FindFirst("sub")?.Value.Should().Be("user123");
+    }
+
+    [Fact]
     public async Task TokenValidated_MapsSingleRole()
     {
         var context = CreateTokenValidatedContext(token: "token_with_role");

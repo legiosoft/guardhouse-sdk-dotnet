@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extension methods for service registration
   - Custom validation attributes
 
+## [1.0.1] - 2026-03-02
+
+### Fixed
+- Fixed introspection validation rejecting active tokens with `Algorithm '' is not allowed` when introspection omitted `alg`
+- Added JWT header `alg` fallback when introspection `alg` is missing while preserving allowlist and `none` rejection
+- Added regression tests for JWT tokens without introspection `alg` and dotted opaque tokens
+
 ## [1.0.0-beta1] - 2026-01-02
 
 ### Added
