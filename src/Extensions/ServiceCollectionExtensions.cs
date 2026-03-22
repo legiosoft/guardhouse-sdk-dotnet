@@ -10,6 +10,7 @@ using Models;
 using Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Polly;
@@ -192,6 +193,116 @@ public static class ServiceCollectionExtensions
             options.Authority = authority;
             options.Audience = audience;
         });
+    }
+
+    /// <summary>
+    /// Adds Guardhouse User API services to dependency injection container.
+    /// This enables your application to manage users via the Guardhouse API.
+    /// Requires AddGuardhouseClient to be called first.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configureAction">Optional action to configure Guardhouse user options.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddGuardhouseUserService(
+        this IServiceCollection services,
+        Action<GuardhouseUserOptions>? configureAction = null)
+    {
+        if (configureAction is not null)
+        {
+            services.Configure(configureAction);
+        }
+
+        services.AddOptions<GuardhouseUserOptions>()
+            .Validate(options =>
+                    string.IsNullOrWhiteSpace(options.ApiBaseUrl) ||
+                    Uri.TryCreate(options.ApiBaseUrl, UriKind.Absolute, out _),
+                "ApiBaseUrl must be an absolute URI when provided.")
+            .ValidateOnStart();
+
+        services.TryAddSingleton<GuardhouseClientPolicyCache>();
+
+        services.AddHttpClient<IGuardhouseUserService, GuardhouseUserService>((_, client) =>
+            {
+                client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+            })
+            .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().RetryPolicy)
+            .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().TimeoutPolicy);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds Guardhouse User API services with simple configuration.
+    /// Requires AddGuardhouseClient to be called first.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="apiBaseUrl">The base URL of the Guardhouse API (e.g., "https://auth.example.com").</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddGuardhouseUserService(
+        this IServiceCollection services,
+        string apiBaseUrl)
+    {
+        return services.AddGuardhouseUserService(options =>
+        {
+            options.ApiBaseUrl = apiBaseUrl;
+        });
+    }
+
+    /// <summary>
+    /// Adds Guardhouse client and User API services in one call.
+    /// This is the easiest way to start using user management endpoints from another project.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configureClientAction">Required Guardhouse client configuration.</param>
+    /// <param name="configureUserAction">Optional Guardhouse user API configuration.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddGuardhouseClientWithUserService(
+        this IServiceCollection services,
+        Action<GuardhouseClientOptions> configureClientAction,
+        Action<GuardhouseUserOptions>? configureUserAction = null)
+    {
+        ArgumentNullException.ThrowIfNull(configureClientAction);
+
+        services.AddGuardhouseClient(configureClientAction);
+        services.AddGuardhouseUserService(configureUserAction);
+        return services;
+    }
+
+    /// <summary>
+    /// Adds Guardhouse client and User API services with simple configuration.
+    /// Disables token refresh by default to avoid requiring offline_access for this quick-start path.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="authority">The authority URL of identity server.</param>
+    /// <param name="clientId">The client ID assigned to your application.</param>
+    /// <param name="clientSecret">The client secret for your application.</param>
+    /// <param name="scope">The scope(s) to request (default: "api").</param>
+    /// <param name="apiBaseUrl">Optional base URL for the User API. If omitted, falls back to Authority.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddGuardhouseClientWithUserService(
+        this IServiceCollection services,
+        string authority,
+        string clientId,
+        string clientSecret,
+        string scope = GuardhouseConstants.Defaults.DefaultScope,
+        string? apiBaseUrl = null)
+    {
+        return services.AddGuardhouseClientWithUserService(
+            configureClientAction: options =>
+            {
+                options.Authority = authority;
+                options.ClientId = clientId;
+                options.ClientSecret = clientSecret;
+                options.Scope = scope;
+                options.EnableTokenRefresh = false;
+            },
+            configureUserAction: options =>
+            {
+                if (!string.IsNullOrWhiteSpace(apiBaseUrl))
+                {
+                    options.ApiBaseUrl = apiBaseUrl;
+                }
+            });
     }
 
     private sealed class GuardhouseClientPolicyCache(IOptions<GuardhouseClientOptions> options)

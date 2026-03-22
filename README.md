@@ -75,6 +75,41 @@ builder.Services.AddGuardhouseClient(
 );
 ```
 
+### User API (Making Requests)
+
+Use this in any app that needs to call Guardhouse user endpoints:
+
+```csharp
+using Guardhouse.SDK.Extensions;
+
+builder.Services.AddGuardhouseClientWithUserService(
+    authority: "https://your-guardhouse-server.com",
+    clientId: "your-system-api-client-id",
+    clientSecret: "your-system-api-client-secret",
+    scope: "api",
+    apiBaseUrl: "https://your-guardhouse-server.com" // optional; falls back to Authority
+);
+
+app.MapPost("/users", async (IGuardhouseUserService userService) =>
+{
+    var createdUser = await userService.CreateUserAsync(new CreateUserRequest
+    {
+        FirstName = "Ada",
+        LastName = "Lovelace",
+        Email = "ada@example.com",
+        Password = "StrongPassword123!"
+    });
+
+    return Results.Ok(createdUser);
+});
+
+app.MapGet("/users/{id:int}", async (int id, IGuardhouseUserService userService) =>
+{
+    var user = await userService.GetUserByIdAsync(id);
+    return user is null ? Results.NotFound() : Results.Ok(user);
+});
+```
+
 ### Resource Server (Protecting APIs)
 
 Configure your API as a Resource to validate incoming tokens:
