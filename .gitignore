@@ -161,3 +161,9 @@ TestResults/
 *.coverage
 *.vsidx
 *.testlog
+
+# Internal security review notes kept out of the public repo
+/docs/SECURITY_REVIEW_INTERNAL.md
+
+# Local Codex diagnostics and temporary verification artifacts
+/.codex-artifacts/
