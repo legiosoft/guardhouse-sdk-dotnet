@@ -225,6 +225,10 @@ public class ServiceCollectionExtensionsTests
         });
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserService));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUsersClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserRolesClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserPermissionsClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserPrivacyClient));
 
         var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<GuardhouseUserOptions>>().Value;
@@ -269,6 +273,10 @@ public class ServiceCollectionExtensionsTests
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserService));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUsersClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserRolesClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserPermissionsClient));
+        services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseUserPrivacyClient));
 
         using var serviceProvider = services.BuildServiceProvider();
         var clientOptions = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;

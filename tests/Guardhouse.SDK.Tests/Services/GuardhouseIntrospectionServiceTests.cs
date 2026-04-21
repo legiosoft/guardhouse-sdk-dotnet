@@ -179,12 +179,16 @@ public class GuardhouseIntrospectionServiceTests
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
-                StatusCode = HttpStatusCode.InternalServerError
+                StatusCode = HttpStatusCode.BadRequest,
+                Content = new StringContent("{\"error\":\"invalid_request\",\"error_description\":\"token=super-secret-token\"}")
             });
 
         var service = CreateService();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.IntrospectTokenAsync("test_token"));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.IntrospectTokenAsync("test_token"));
+        exception.Message.Should().Contain("invalid_request");
+        exception.Message.Should().NotContain("error_description");
+        exception.Message.Should().NotContain("super-secret-token");
     }
 
     [Fact]

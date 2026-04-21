@@ -132,7 +132,30 @@ public class GuardhouseUserServiceTests
     }
 
     [Fact]
-    public async Task ChangePasswordAsync_WhenBadRequest_ShouldThrowWithResponseMessage()
+    public async Task DeleteUserAsync_WhenUserNotFound_ShouldReturnFalse()
+    {
+        HttpRequestMessage? sentRequest = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((request, _) => sentRequest = request)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NotFound
+            });
+
+        var client = CreateUsersClient();
+        var result = await client.DeleteUserAsync(999);
+
+        result.Should().BeFalse();
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Method.Should().Be(HttpMethod.Delete);
+        sentRequest.RequestUri.Should().Be(new Uri("https://api.guardhouse.test/api/v1/users/999"));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenBadRequest_ShouldNotExposeRawResponseBody()
     {
         _mockHttpMessageHandler
             .Protected()
@@ -140,7 +163,7 @@ public class GuardhouseUserServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
-                Content = new StringContent("Invalid current password")
+                Content = new StringContent("Current password 'wrong' is invalid for ada@example.com")
             });
 
         var service = CreateService();
@@ -151,12 +174,15 @@ public class GuardhouseUserServiceTests
             NewPassword = "NewStrongPassword123!"
         });
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Invalid current password*");
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("BadRequest");
+        exception.Which.Message.Should().Contain("Response body omitted for security.");
+        exception.Which.Message.Should().NotContain("wrong");
+        exception.Which.Message.Should().NotContain("ada@example.com");
     }
 
     [Fact]
-    public async Task CreateUserAsync_WhenConflict_ShouldThrowWithServerDetails()
+    public async Task CreateUserAsync_WhenConflict_ShouldNotExposeRawResponseBody()
     {
         _mockHttpMessageHandler
             .Protected()
@@ -164,7 +190,7 @@ public class GuardhouseUserServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.Conflict,
-                Content = new StringContent("User already exists")
+                Content = new StringContent("User ada@example.com already exists with password hash abc123")
             });
 
         var service = CreateService();
@@ -176,8 +202,11 @@ public class GuardhouseUserServiceTests
             Email = "ada@example.com"
         });
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*User already exists*");
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("Conflict");
+        exception.Which.Message.Should().Contain("Response body omitted for security.");
+        exception.Which.Message.Should().NotContain("ada@example.com");
+        exception.Which.Message.Should().NotContain("abc123");
     }
 
     [Fact]
@@ -233,7 +262,7 @@ public class GuardhouseUserServiceTests
     }
 
     [Fact]
-    public async Task UpdateUserAsync_WhenServerFails_ShouldThrowWithStatusCodeAndResponse()
+    public async Task UpdateUserAsync_WhenServerFails_ShouldExposeOnlySafeErrorCode()
     {
         _mockHttpMessageHandler
             .Protected()
@@ -241,7 +270,7 @@ public class GuardhouseUserServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.InternalServerError,
-                Content = new StringContent("{\"error\":\"server_error\"}")
+                Content = new StringContent("{\"error\":\"server_error\",\"detail\":\"password=SuperSecret123!\"}")
             });
 
         var service = CreateService();
@@ -253,8 +282,12 @@ public class GuardhouseUserServiceTests
             Email = "updated@example.com"
         });
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*InternalServerError*500*server_error*");
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("InternalServerError");
+        exception.Which.Message.Should().Contain("500");
+        exception.Which.Message.Should().Contain("server_error");
+        exception.Which.Message.Should().NotContain("detail");
+        exception.Which.Message.Should().NotContain("SuperSecret123!");
     }
 
     [Fact]
@@ -285,6 +318,18 @@ public class GuardhouseUserServiceTests
         IOptions<GuardhouseClientOptions>? clientOptions = null)
     {
         return new GuardhouseUserService(
+            _httpClient,
+            _mockTokenService.Object,
+            userOptions ?? _userOptions,
+            clientOptions ?? _clientOptions,
+            _mockLogger.Object);
+    }
+
+    private GuardhouseUsersClient CreateUsersClient(
+        IOptions<GuardhouseUserOptions>? userOptions = null,
+        IOptions<GuardhouseClientOptions>? clientOptions = null)
+    {
+        return new GuardhouseUsersClient(
             _httpClient,
             _mockTokenService.Object,
             userOptions ?? _userOptions,

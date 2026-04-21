@@ -50,12 +50,12 @@ public class GuardhouseTokenServiceTests
         _options = Options.Create(options);
     }
 
-    private GuardhouseTokenService CreateTokenService()
+    private GuardhouseTokenService CreateTokenService(IOptions<GuardhouseClientOptions>? options = null)
     {
         return new GuardhouseTokenService(
             _httpClient,
             _memoryCache,
-            _options,
+            options ?? _options,
             _mockLogger.Object,
             _testClock);
     }
@@ -186,18 +186,21 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task RequestTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
+        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
-                Content = new StringContent("{\"error\":\"invalid_client\"}")
+                Content = new StringContent("{\"error\":\"invalid_client\",\"error_description\":\"client_secret=super-secret\"}")
             });
 
-        var tokenService = CreateTokenService();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RequestTokenAsync());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RequestTokenAsync());
+        exception.Message.Should().Contain("invalid_client");
+        exception.Message.Should().NotContain("error_description");
+        exception.Message.Should().NotContain("super-secret");
     }
 
     [Fact]
@@ -255,18 +258,21 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task RefreshTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
+        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.Unauthorized,
-                Content = new StringContent("{\"error\":\"invalid_grant\"}")
+                Content = new StringContent("{\"error\":\"invalid_grant\",\"error_description\":\"refresh_token=secret-refresh-token\"}")
             });
 
-        var tokenService = CreateTokenService();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RefreshTokenAsync("refresh_token"));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RefreshTokenAsync("refresh_token"));
+        exception.Message.Should().Contain("invalid_grant");
+        exception.Message.Should().NotContain("error_description");
+        exception.Message.Should().NotContain("secret-refresh-token");
     }
 
     #endregion
@@ -497,18 +503,21 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task IntrospectTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
+        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
-                Content = new StringContent("{\"error\":\"invalid_request\"}")
+                Content = new StringContent("{\"error\":\"invalid_request\",\"error_description\":\"token=test_token\"}")
             });
 
-        var tokenService = CreateTokenService();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.IntrospectTokenAsync("test_token"));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.IntrospectTokenAsync("test_token"));
+        exception.Message.Should().Contain("invalid_request");
+        exception.Message.Should().NotContain("error_description");
+        exception.Message.Should().NotContain("token=test_token");
     }
 
     [Fact]
@@ -692,6 +701,23 @@ public class GuardhouseTokenServiceTests
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(JsonSerializer.Serialize(introspectionResponse))
             });
+    }
+
+    private static IOptions<GuardhouseClientOptions> CreateNonRetryingOptions()
+    {
+        return Options.Create(new GuardhouseClientOptions
+        {
+            Authority = "https://test-guardhouse.com",
+            ClientId = "test-client",
+            ClientSecret = "test-secret",
+            Scope = "api",
+            EnableTokenCaching = true,
+            CacheExpirationBufferSeconds = 60,
+            EnableTokenRefresh = true,
+            EnableHttpResilience = false,
+            RequestTimeoutSeconds = 30,
+            MaxRetryAttempts = 3
+        });
     }
 
     #endregion
