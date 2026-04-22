@@ -104,6 +104,7 @@ public record IntrospectionResponse
     /// Multiple roles assigned to the token subject as an array.
     /// </summary>
     [JsonPropertyName("role")]
+    [JsonConverter(typeof(SingleOrArrayConverter))]
     public string[]? Role { get; init; }
 
     /// <summary>
