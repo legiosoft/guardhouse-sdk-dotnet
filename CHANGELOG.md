@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extension methods for service registration
   - Custom validation attributes
 
+### Changed
+- Made `AddGuardhouseClient(...)`, `AddGuardhouseResource(...)`, and `AddGuardhouseApiClients(...)` idempotent for repeated registration scenarios
+
+### Documentation
+- Clarified in the SDK setup docs that repeated Guardhouse DI registration is safe and later configuration delegates still apply
+
 ## [1.0.2] - 2026-04-23
 
 ### Changed
