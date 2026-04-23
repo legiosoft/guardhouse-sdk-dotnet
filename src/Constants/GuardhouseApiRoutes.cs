@@ -16,24 +16,49 @@ public static class GuardhouseApiRoutes
             return $"{ById(userId)}/password";
         }
 
-        public static string Roles(int userId)
+        public static string Role(int userId, int roleId)
         {
-            return $"{ById(userId)}/roles";
+            return $"{ById(userId)}/roles/{roleId}";
         }
 
-        public static string Permissions(int userId)
+        public static string Block(int userId)
         {
-            return $"{ById(userId)}/permissions";
+            return $"{ById(userId)}/block";
+        }
+
+        public static string Unblock(int userId)
+        {
+            return $"{ById(userId)}/unblock";
         }
 
         public static string PersonalData(int userId)
         {
             return $"{ById(userId)}/personal-data";
         }
+    }
 
-        public static string Anonymize(int userId)
+    public static class Roles
+    {
+        public const string Collection = "api/v1/roles";
+
+        public static string ById(int roleId)
         {
-            return $"{ById(userId)}/anonymize";
+            return $"{Collection}/{roleId}";
+        }
+
+        public static string Permissions(int roleId)
+        {
+            return $"{ById(roleId)}/permissions";
+        }
+    }
+
+    public static class Permissions
+    {
+        public const string Collection = "api/v1/permissions";
+
+        public static string ById(int permissionId)
+        {
+            return $"{Collection}/{permissionId}";
         }
     }
 }
