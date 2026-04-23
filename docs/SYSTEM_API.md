@@ -64,12 +64,15 @@ builder.Services.AddGuardhouseApiClients(options =>
 });
 ```
 
+Calling `AddGuardhouseClient(...)` or `AddGuardhouseApiClients(...)` more than once is safe. The SDK registers its internal infrastructure once, and later configuration delegates continue to apply option values.
+
 ## Configuration Notes
 
 - `Authority` is used by the token client.
 - `ApiBaseUrl` is the base URL for the system API endpoints.
 - If `ApiBaseUrl` is omitted, the SDK falls back to `Authority`.
 - The intended scope for system API access is `AuthorizationConsts.Scopes.SystemApi` (`system_api`).
+- Split registration across shared startup code, tests, or feature modules without duplicating the SDK's internal DI services.
 
 ## Client Injection
 
