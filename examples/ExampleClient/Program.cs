@@ -1,5 +1,6 @@
 using Guardhouse.SDK.Extensions;
 using Guardhouse.SDK.Models;
+using Microsoft.Extensions.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +22,13 @@ builder.Services.AddGuardhouseClient(options =>
     options.EnableTokenRefresh = true;
     options.IncludeOfflineAccessScope = true;
     options.EnableHttpResilience = true;
+    options.EnableDebug = builder.Configuration.GetValue<bool>("Guardhouse:EnableDebug");
+});
+
+builder.Services.AddGuardhouseApiClients(options =>
+{
+    options.ApiBaseUrl = builder.Configuration["Guardhouse:ApiBaseUrl"] ?? builder.Configuration["Guardhouse:Authority"]!;
+    options.EnableDebug = builder.Configuration.GetValue<bool>("Guardhouse:EnableDebug");
 });
 
 builder.Services.AddScoped<ExampleClient.Services.IProductService, ExampleClient.Services.ProductService>();

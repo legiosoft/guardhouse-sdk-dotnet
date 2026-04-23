@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extension methods for service registration
   - Custom validation attributes
 
+## [1.0.2] - 2026-04-23
+
+### Changed
+- Aligned the SDK system API surface with the external `Endpoints/API` contracts for users, roles, and permissions
+- Added dedicated `IGuardhouseRolesClient` and `IGuardhousePermissionsClient` typed clients
+- Reworked user request and response models to match the external API contracts
+- Updated the example client and system API documentation
+
+### Removed
+- Removed obsolete SDK-only user roles, user permissions, and user privacy client surfaces that were not backed by external `Endpoints/API` routes
+
+### Documentation
+- Refreshed the root `README.md` for NuGet/package consumers
+- Added `docs/SYSTEM_API.md` as the dedicated system API usage guide
+
 ## [1.0.1] - 2026-03-02
 
 ### Fixed

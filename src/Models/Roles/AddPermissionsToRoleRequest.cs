@@ -1,9 +1,8 @@
-namespace Guardhouse.SDK.Models.Users.Permissions;
+namespace Guardhouse.SDK.Models.Roles;
 
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-public record AddUserPermissionsRequest
+public record AddPermissionsToRoleRequest
 {
     [JsonPropertyName("permissionIds")]
     public IReadOnlyList<int> PermissionIds { get; init; } = [];

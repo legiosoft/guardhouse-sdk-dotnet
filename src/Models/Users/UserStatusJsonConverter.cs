@@ -52,9 +52,12 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
         writer.WriteStringValue(value switch
         {
             UserStatus.Staged => "staged",
+            UserStatus.Invited => "invited",
             UserStatus.Active => "active",
             UserStatus.Inactive => "inactive",
             UserStatus.Locked => "locked",
+            UserStatus.Suspended => "suspended",
+            UserStatus.Archived => "archived",
             _ => "unknown"
         });
     }
@@ -78,6 +81,12 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
             return true;
         }
 
+        if (string.Equals(normalizedValue, "invited", StringComparison.OrdinalIgnoreCase))
+        {
+            status = UserStatus.Invited;
+            return true;
+        }
+
         if (string.Equals(normalizedValue, "active", StringComparison.OrdinalIgnoreCase))
         {
             status = UserStatus.Active;
@@ -92,10 +101,21 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
         }
 
         if (string.Equals(normalizedValue, "locked", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalizedValue, "lockedout", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalizedValue, "suspended", StringComparison.OrdinalIgnoreCase))
+            string.Equals(normalizedValue, "lockedout", StringComparison.OrdinalIgnoreCase))
         {
             status = UserStatus.Locked;
+            return true;
+        }
+
+        if (string.Equals(normalizedValue, "suspended", StringComparison.OrdinalIgnoreCase))
+        {
+            status = UserStatus.Suspended;
+            return true;
+        }
+
+        if (string.Equals(normalizedValue, "archived", StringComparison.OrdinalIgnoreCase))
+        {
+            status = UserStatus.Archived;
             return true;
         }
 

@@ -12,4 +12,7 @@ public record UpdateUserRequest
 
     [JsonPropertyName("email")]
     public string Email { get; init; } = string.Empty;
+
+    [JsonPropertyName("triggerWebhook")]
+    public bool TriggerWebhook { get; init; }
 }

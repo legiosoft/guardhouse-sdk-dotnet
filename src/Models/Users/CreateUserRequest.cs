@@ -13,6 +13,15 @@ public record CreateUserRequest
     [JsonPropertyName("email")]
     public string Email { get; init; } = string.Empty;
 
-    [JsonPropertyName("password")]
-    public string? Password { get; init; }
+    [JsonPropertyName("sendInvite")]
+    public bool SendInvite { get; init; }
+
+    [JsonPropertyName("triggerWebhook")]
+    public bool TriggerWebhook { get; init; }
+
+    [JsonPropertyName("redirectUrl")]
+    public string? RedirectUrl { get; init; }
+
+    [JsonPropertyName("inviterName")]
+    public string? InviterName { get; init; }
 }

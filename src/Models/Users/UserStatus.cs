@@ -9,5 +9,8 @@ public enum UserStatus
     Staged = 0,
     Active = 1,
     Inactive = 2,
-    Locked = 3
+    Locked = 3,
+    Invited = 4,
+    Suspended = 5,
+    Archived = 6
 }

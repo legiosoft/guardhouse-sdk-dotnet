@@ -1,7 +1,6 @@
 namespace Guardhouse.SDK.Services;
 
 using System;
-using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Models;
 using Models.Users;
+using Models.Users.Privacy;
 
 public class GuardhouseUsersClient(
     HttpClient httpClient,
@@ -17,7 +17,7 @@ public class GuardhouseUsersClient(
     IOptions<GuardhouseUserOptions> userOptions,
     IOptions<GuardhouseClientOptions> clientOptions,
     ILogger? logger = null)
-    : GuardhouseUserManagementClientBase(httpClient, tokenService, userOptions, clientOptions, logger),
+    : GuardhouseApiClientBase(httpClient, tokenService, userOptions, clientOptions, logger),
         IGuardhouseUsersClient
 {
     public async Task<CreateUserResponse> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
@@ -30,18 +30,34 @@ public class GuardhouseUsersClient(
             request,
             cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.Conflict)
-        {
-            var conflictDetails = await ReadSafeResponseSummaryAsync(response, cancellationToken);
-            throw new InvalidOperationException(
-                $"Failed to create user. Status: {response.StatusCode} ({(int)response.StatusCode}). " +
-                conflictDetails);
-        }
-
         await EnsureSuccessStatusCodeAsync(response, "create user", cancellationToken);
 
         var result = await ReadJsonAsync<CreateUserResponse>(response, cancellationToken);
         return result ?? throw new InvalidOperationException("Failed to deserialize CreateUserResponse");
+    }
+
+    public async Task<GetUsersResponse> GetUsersAsync(GetUsersRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var path = AppendQueryString(
+            GuardhouseApiRoutes.Users.Collection,
+            [
+                new KeyValuePair<string, string?>("pageSize", request.PageSize.ToString()),
+                new KeyValuePair<string, string?>("offset", request.Offset.ToString()),
+                new KeyValuePair<string, string?>("email", request.Email)
+            ]);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Get,
+            path,
+            null,
+            cancellationToken);
+
+        await EnsureSuccessStatusCodeAsync(response, "get users", cancellationToken);
+
+        var result = await ReadJsonAsync<GetUsersResponse>(response, cancellationToken);
+        return result ?? throw new InvalidOperationException("Failed to deserialize GetUsersResponse");
     }
 
     public async Task<GetUserByIdResponse?> GetUserByIdAsync(int userId, CancellationToken cancellationToken = default)
@@ -52,12 +68,11 @@ public class GuardhouseUsersClient(
             null,
             cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.NotFound)
+        var exists = await ReturnFalseOnNotFoundAsync(response, $"get user '{userId}'", cancellationToken);
+        if (!exists)
         {
             return null;
         }
-
-        await EnsureSuccessStatusCodeAsync(response, $"get user by id '{userId}'", cancellationToken);
 
         var result = await ReadJsonAsync<GetUserByIdResponse>(response, cancellationToken);
         return result ?? throw new InvalidOperationException("Failed to deserialize GetUserByIdResponse");
@@ -76,17 +91,6 @@ public class GuardhouseUsersClient(
         return await ReturnFalseOnNotFoundAsync(response, $"update user '{userId}'", cancellationToken);
     }
 
-    public async Task<bool> DeleteUserAsync(int userId, CancellationToken cancellationToken = default)
-    {
-        using var response = await SendAuthenticatedRequestAsync(
-            HttpMethod.Delete,
-            GuardhouseApiRoutes.Users.ById(userId),
-            null,
-            cancellationToken);
-
-        return await ReturnFalseOnNotFoundAsync(response, $"delete user '{userId}'", cancellationToken);
-    }
-
     public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -97,20 +101,82 @@ public class GuardhouseUsersClient(
             request,
             cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
+        return await ReturnFalseOnNotFoundAsync(response, $"change password for user '{userId}'", cancellationToken);
+    }
 
-        if (response.StatusCode == HttpStatusCode.BadRequest)
-        {
-            var badRequestDetails = await ReadSafeResponseSummaryAsync(response, cancellationToken);
-            throw new InvalidOperationException(
-                $"Failed to change user password. Status: {response.StatusCode} ({(int)response.StatusCode}). " +
-                badRequestDetails);
-        }
+    public async Task<bool> AssignUserToRoleAsync(int userId, int roleId, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Post,
+            GuardhouseApiRoutes.Users.Role(userId, roleId),
+            null,
+            cancellationToken);
 
-        await EnsureSuccessStatusCodeAsync(response, $"change password for user '{userId}'", cancellationToken);
-        return true;
+        return await ReturnFalseOnNotFoundAsync(
+            response,
+            $"assign role '{roleId}' to user '{userId}'",
+            cancellationToken);
+    }
+
+    public async Task<bool> UnassignUserFromRoleAsync(
+        int userId,
+        int roleId,
+        UnassignUserFromRoleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Delete,
+            GuardhouseApiRoutes.Users.Role(userId, roleId),
+            request,
+            cancellationToken);
+
+        return await ReturnFalseOnNotFoundAsync(
+            response,
+            $"unassign role '{roleId}' from user '{userId}'",
+            cancellationToken);
+    }
+
+    public async Task<bool> BlockUserAsync(int userId, BlockUserRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Patch,
+            GuardhouseApiRoutes.Users.Block(userId),
+            request,
+            cancellationToken);
+
+        return await ReturnFalseOnNotFoundAsync(response, $"block user '{userId}'", cancellationToken);
+    }
+
+    public async Task<bool> UnblockUserAsync(int userId, UnblockUserRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Patch,
+            GuardhouseApiRoutes.Users.Unblock(userId),
+            request,
+            cancellationToken);
+
+        return await ReturnFalseOnNotFoundAsync(response, $"unblock user '{userId}'", cancellationToken);
+    }
+
+    public async Task<bool> DeleteUserPersonalDataAsync(
+        int userId,
+        DeleteUserPersonalDataRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Put,
+            GuardhouseApiRoutes.Users.PersonalData(userId),
+            request,
+            cancellationToken);
+
+        return await ReturnFalseOnNotFoundAsync(response, $"delete personal data for user '{userId}'", cancellationToken);
     }
 }
