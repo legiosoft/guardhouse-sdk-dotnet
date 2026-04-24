@@ -59,6 +59,36 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddGuardhouseClient_WhenCalledMultipleTimes_ShouldRegisterCoreServicesOnce()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGuardhouseClient(options =>
+        {
+            options.Authority = "https://test.com";
+            options.ClientId = "test-client";
+            options.ClientSecret = "test-secret";
+            options.IncludeOfflineAccessScope = true;
+        });
+
+        services.AddGuardhouseClient(options =>
+        {
+            options.Scope = "api offline_access";
+            options.MaxRetryAttempts = 3;
+        });
+
+        services.Count(sd => sd.ServiceType == typeof(NodaTime.IClock)).Should().Be(1);
+        services.Count(sd => sd.ServiceType == typeof(IMemoryCache)).Should().Be(1);
+        services.Count(sd => sd.ServiceType == typeof(IGuardhouseTokenService)).Should().Be(1);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+
+        options.Scope.Should().Be("api offline_access");
+        options.MaxRetryAttempts.Should().Be(3);
+    }
+
+    [Fact]
     public void AddGuardhouseClient_WithRefreshEnabledWithoutOfflineAccess_ShouldFailValidation()
     {
         var services = new ServiceCollection();
@@ -185,6 +215,42 @@ public class ServiceCollectionExtensionsTests
         options.EnableIntrospection.Should().BeFalse();
         options.IntrospectionClientId.Should().BeNull();
         options.IntrospectionClientSecret.Should().BeNull();
+    }
+
+    [Fact]
+    public void AddGuardhouseResource_WhenCalledMultipleTimes_ShouldRegisterCoreServicesOnce()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+        });
+
+        services.AddGuardhouseResource(options =>
+        {
+            options.Authority = "https://test.com";
+            options.Audience = "test-audience";
+            options.RequestTimeoutSeconds = 15;
+        });
+
+        services.Count(sd => sd.ServiceType == typeof(IMemoryCache)).Should().Be(1);
+        services.Count(sd => sd.ServiceType == typeof(IGuardhouseIntrospectionService)).Should().Be(1);
+        services.Count(sd => sd.ServiceType == typeof(IGuardhouseResourceService)).Should().Be(1);
+        services.Count(sd =>
+                sd.ServiceType == typeof(IConfigureOptions<JwtBearerOptions>) &&
+                sd.ImplementationType == typeof(ConfigureGuardhouseJwtOptions))
+            .Should()
+            .Be(1);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var resourceOptions = serviceProvider.GetRequiredService<IOptions<GuardhouseResourceOptions>>().Value;
+        resourceOptions.RequestTimeoutSeconds.Should().Be(15);
+
+        var jwtOptionsMonitor = serviceProvider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>();
+        Action act = () => _ = jwtOptionsMonitor.Get(GuardhouseConstants.Authentication.DefaultScheme);
+        act.Should().NotThrow();
     }
 
     [Fact]
