@@ -7,36 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-04-24
+
 ### Added
-- Comprehensive XML documentation comments for all public APIs
-  - `GuardhouseClientOptions` with detailed property descriptions
-  - `GuardhouseResourceOptions` with configuration explanations
-  - `TokenValidationMode` enum with usage guidance
-  - `IntrospectionResponse` and `TokenResponse` models
-  - All service interfaces and implementations
-  - Extension methods for service registration
-  - Custom validation attributes
-
-### Changed
-- Made `AddGuardhouseClient(...)`, `AddGuardhouseResource(...)`, and `AddGuardhouseApiClients(...)` idempotent for repeated registration scenarios
-
-### Documentation
-- Clarified in the SDK setup docs that repeated Guardhouse DI registration is safe and later configuration delegates still apply
-
-## [1.0.2] - 2026-04-23
+- Added dedicated `IGuardhouseRolesClient` and `IGuardhousePermissionsClient` typed clients
+- Added comprehensive XML documentation comments for public options, models, service interfaces, service implementations, extension methods, and validation attributes
+- Added `docs/SYSTEM_API.md` as the dedicated system API usage guide
 
 ### Changed
 - Aligned the SDK system API surface with the external `Endpoints/API` contracts for users, roles, and permissions
-- Added dedicated `IGuardhouseRolesClient` and `IGuardhousePermissionsClient` typed clients
 - Reworked user request and response models to match the external API contracts
 - Updated the example client and system API documentation
+- Made `AddGuardhouseClient(...)`, `AddGuardhouseResource(...)`, and `AddGuardhouseApiClients(...)` idempotent for repeated registration scenarios
 
 ### Removed
 - Removed obsolete SDK-only user roles, user permissions, and user privacy client surfaces that were not backed by external `Endpoints/API` routes
 
 ### Documentation
 - Refreshed the root `README.md` for NuGet/package consumers
-- Added `docs/SYSTEM_API.md` as the dedicated system API usage guide
+- Clarified that repeated Guardhouse DI registration is safe and later configuration delegates still apply
 
 ## [1.0.1] - 2026-03-02
 
