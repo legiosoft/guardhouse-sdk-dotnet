@@ -126,16 +126,14 @@ public class GuardhouseIntrospectionService(
                     $"Verify your Guardhouse instance is accessible and introspection credentials are correct.", ex);
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
             if (!response.IsSuccessStatusCode)
             {
+                var errorDetails = await GuardhouseErrorResponseSanitizer.SummarizeAsync(response.Content, cancellationToken);
                 _logger.LogError(
-                    "Introspection request failed with status {StatusCode}. Response: {Response}",
+                    "Introspection request failed with status {StatusCode}. {ResponseSummary}",
                     response.StatusCode,
-                    responseContent);
+                    errorDetails);
 
-                var errorDetails = ParseErrorResponse(responseContent);
                 throw new InvalidOperationException(
                     $"Failed to introspect token from {introspectionEndpoint}. " +
                     $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
@@ -143,6 +141,7 @@ public class GuardhouseIntrospectionService(
                     $"Verify your IntrospectionClientId and IntrospectionClientSecret are configured correctly in GuardhouseResourceOptions.");
             }
 
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -203,31 +202,6 @@ public class GuardhouseIntrospectionService(
     {
         var lockIndex = (cacheKey.GetHashCode() & int.MaxValue) % IntrospectionLocks.Length;
         return IntrospectionLocks[lockIndex];
-    }
-
-    private static string ParseErrorResponse(string responseContent)
-    {
-        try
-        {
-            var errorDoc = JsonDocument.Parse(responseContent);
-            var error = errorDoc.RootElement.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null;
-            var errorDescription = errorDoc.RootElement.TryGetProperty("error_description", out var descProp) ? descProp.GetString() : null;
-
-            if (!string.IsNullOrEmpty(error))
-            {
-                if (!string.IsNullOrEmpty(errorDescription))
-                {
-                    return $"Error: {error}. Description: {errorDescription}";
-                }
-                return $"Error: {error}";
-            }
-        }
-        catch
-        {
-            // Ignore JSON parsing errors
-        }
-
-        return $"Response: {responseContent}";
     }
 
     private static Uri EnsureAuthorityUri(string authority, bool requireHttps)
