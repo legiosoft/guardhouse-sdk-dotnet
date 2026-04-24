@@ -1,31 +1,52 @@
 # Guardhouse SDK for .NET
 
-Official .NET SDK for Guardhouse Cloud. Use it in .NET applications to request access tokens or validate incoming tokens against your Guardhouse instance.
+Official .NET SDK for Guardhouse Cloud.
+
+Use it to:
+
+- request access tokens with the client credentials flow
+- validate incoming tokens with JWT signature validation or introspection
+- call the external Guardhouse system API for users, roles, and permissions
+
+Supported frameworks:
+
+- .NET 6.0
+- .NET 7.0
+- .NET 8.0
+- .NET 9.0
+- .NET 10.0
 
 ## Installation
-
-Install via NuGet:
 
 ```bash
 dotnet add package Guardhouse.SDK
 ```
 
-Or via NuGet Package Manager Console:
+## What The SDK Includes
 
-```
-Install-Package Guardhouse.SDK
-```
+- `IGuardhouseTokenService` for token acquisition, refresh, and introspection
+- `IGuardhouseResourceService` for resource-server token validation
+- `IGuardhouseUsersClient`, `IGuardhouseRolesClient`, and `IGuardhousePermissionsClient` for the external system API
+- DI extensions for client, resource server, and system API registration
+- HTTP resilience with Polly
+- JWKS caching with lazy refresh
 
-**Supported Frameworks**: .NET 6.0, 7.0, 8.0, 9.0, 10.0
+## Core Capabilities
+
+- Client credentials token acquisition with in-memory token caching
+- Optional refresh-token support through `offline_access`
+- JWT signature validation using OpenID Connect metadata and JWKS
+- RFC 7662 token introspection for resource-server validation and client-side inspection
+- Typed external system API clients for users, roles, and permissions
+- Retry and timeout policies for outbound HTTP calls
 
 ## Quick Start
 
-### Client Application (Requesting Access Tokens)
-
-Configure your application as a Client to request access tokens:
+### Client Application
 
 ```csharp
 using Guardhouse.SDK.Extensions;
+using Guardhouse.SDK.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,105 +63,95 @@ builder.Services.AddGuardhouseClient(options =>
 
 var app = builder.Build();
 
-// Example: Get access token and call protected API
-app.MapGet("/api/call-protected", async (IGuardhouseTokenService tokenService) =>
+app.MapGet("/token", async (IGuardhouseTokenService tokenService) =>
 {
     var accessToken = await tokenService.GetAccessTokenAsync();
-
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.Authorization =
-        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-
-    var response = await client.GetAsync("https://protected-api.com/data");
-    var data = await response.Content.ReadAsStringAsync();
-
     return Results.Ok(new
     {
-        Response = data,
-        AccessTokenPreview = accessToken.Substring(0, Math.Min(20, accessToken.Length)) + "..."
+        AccessTokenPreview = accessToken[..Math.Min(20, accessToken.Length)] + "..."
     });
 });
 
 app.Run();
 ```
 
-Minimal configuration:
+### System API
+
+Use this when your application needs to call the external Guardhouse endpoints under `Users`, `Roles`, and `Permissions`.
 
 ```csharp
-builder.Services.AddGuardhouseClient(
-    authority: "https://your-guardhouse-server.com",
-    clientId: "your-client-id",
-    clientSecret: "your-client-secret",
-    scope: "api offline_access"
-);
-```
-
-### User API (Making Requests)
-
-Use this in any app that needs to call Guardhouse user endpoints:
-
-```csharp
+using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Extensions;
+using Guardhouse.SDK.Models.Users;
+using Guardhouse.SDK.Services;
 
-builder.Services.AddGuardhouseClientWithUserService(
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddGuardhouseClientWithApiClients(
     authority: "https://your-guardhouse-server.com",
     clientId: "your-system-api-client-id",
     clientSecret: "your-system-api-client-secret",
-    scope: "api",
-    apiBaseUrl: "https://your-guardhouse-server.com" // optional; falls back to Authority
-);
+    scope: AuthorizationConsts.Scopes.SystemApi,
+    apiBaseUrl: "https://your-guardhouse-server.com");
 
-app.MapPost("/users", async (IGuardhouseUserService userService) =>
+var app = builder.Build();
+
+app.MapPost("/users", async (IGuardhouseUsersClient usersClient) =>
 {
-    var createdUser = await userService.CreateUserAsync(new CreateUserRequest
+    var created = await usersClient.CreateUserAsync(new CreateUserRequest
     {
         FirstName = "Ada",
         LastName = "Lovelace",
         Email = "ada@example.com",
-        Password = "StrongPassword123!"
+        SendInvite = true,
+        InviterName = "Grace Hopper",
+        RedirectUrl = "https://your-app.example.com/invitation"
     });
 
-    return Results.Ok(createdUser);
+    return Results.Ok(created);
 });
 
-app.MapGet("/users/{id:int}", async (int id, IGuardhouseUserService userService) =>
+app.MapGet("/users/{id:int}", async (int id, IGuardhouseUsersClient usersClient) =>
 {
-    var user = await userService.GetUserByIdAsync(id);
+    var user = await usersClient.GetUserByIdAsync(id);
     return user is null ? Results.NotFound() : Results.Ok(user);
 });
+
+app.Run();
 ```
 
-### Resource Server (Protecting APIs)
+For the full endpoint-to-client mapping, see the [System API Guide](https://github.com/legiosoft/guardhouse-sdk-dotnet/blob/main/docs/SYSTEM_API.md).
 
-Configure your API as a Resource to validate incoming tokens:
+### Resource Server
 
 ```csharp
+using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Extensions;
+using Guardhouse.SDK.Models;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddAuthentication(GuardhouseConstants.Authentication.DefaultScheme);
 builder.Services.AddGuardhouseResource(options =>
 {
     options.Authority = "https://your-guardhouse-server.com";
     options.Audience = "my_resource_api";
     options.ValidationMode = TokenValidationMode.JwtSignature;
 });
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Protected endpoint
-app.MapGet("/api/protected", [Authorize] () =>
-{
-    return new { Message = "This is protected data", Timestamp = DateTime.UtcNow };
-});
+app.MapGet("/protected", [Authorize] () => Results.Ok(new { Message = "Protected" }));
 
 app.Run();
 ```
 
- With Token Introspection (RFC 7662):
+For introspection mode:
 
 ```csharp
 builder.Services.AddGuardhouseResource(options =>
@@ -153,137 +164,36 @@ builder.Services.AddGuardhouseResource(options =>
 });
 ```
 
-By default, the SDK sends introspection credentials as form data (`client_id` and `client_secret`).
+Validation modes:
 
-If your identity server requires HTTP Basic Authentication for introspection, set credential transmission to `BasicAuth`:
+- `TokenValidationMode.JwtSignature` validates JWTs locally using discovered signing keys
+- `TokenValidationMode.Introspection` validates tokens through the Guardhouse introspection endpoint
 
-```csharp
-builder.Services.AddGuardhouseResource(options =>
-{
-    options.Authority = "https://your-guardhouse-server.com";
-    options.Audience = "my_resource_api";
-    options.ValidationMode = TokenValidationMode.Introspection;
-    options.IntrospectionClientId = "your-introspection-client-id";
-    options.IntrospectionClientSecret = "your-introspection-client-secret";
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth;
-});
-```
+## Registration Helpers
 
-## Configuration
+Client registration:
 
-### Client Options
+- `AddGuardhouseClient(...)`
+- `AddGuardhouse(...)`
 
-```csharp
-builder.Services.AddGuardhouseClient(options =>
-{
-    options.Authority = "https://your-guardhouse-server.com";            // Required
-    options.RequireHttps = true;                                          // Default: true
-    options.ClientId = "your-client-id";                                 // Required
-    options.ClientSecret = "your-client-secret";                         // Required
-    options.Scope = "api";                                                // Default: "api"
+System API registration:
 
-    // Token caching & refresh
-    options.EnableTokenCaching = true;                                   // Default: true
-    options.CacheExpirationBufferSeconds = 60;                           // Default: 60
-    options.RefreshTokenCacheDurationDays = 30;                          // Default: 30
-    options.EnableTokenRefresh = true;                                   // Default: true
-    options.IncludeOfflineAccessScope = false;                           // Default: false (set true if your identity server requires offline_access for refresh tokens)
+- `AddGuardhouseApiClients(...)`
+- `AddGuardhouseClientWithApiClients(...)`
+- `AddGuardhouseUserClients(...)`
+- `AddGuardhouseClientWithUserClients(...)`
 
-    // Resilience
-    options.EnableHttpResilience = true;                                 // Default: true
-    options.RequestTimeoutSeconds = 30;                                  // Default: 30
-    options.MaxRetryAttempts = 3;                                        // Default: 3
+Resource server registration:
 
-    // Introspection (optional - for debugging purposes)
-    options.IntrospectionClientId = "your-introspection-client-id";      // Optional
-    options.IntrospectionClientSecret = "your-introspection-client-secret"; // Optional
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData; // Default: FormData
+- `AddGuardhouseResource(...)`
 
-    options.EnableDebug = false;                                         // Default: false
-});
-```
+Backward-compatible aliases are still available for the older user-service naming.
 
-### Resource Options
+Repeated calls to the Guardhouse registration helpers are safe. The SDK adds its internal infrastructure once, while later `configureAction` delegates still layer option values.
 
-```csharp
-builder.Services.AddGuardhouseResource(options =>
-{
-    options.Authority = "https://your-guardhouse-server.com";            // Required
-    options.Audience = "my_resource_api";                                // Required
-    options.PolicyName = "Guardhouse";                                    // Default: "Guardhouse"
+## Main Interfaces
 
-    // Validation mode: JWT Signature or Introspection
-    options.ValidationMode = TokenValidationMode.JwtSignature;            // Default: JWT Signature
-
-    // Required for Introspection mode
-    options.IntrospectionClientId = "your-client-id";                     // Required for introspection
-    options.IntrospectionClientSecret = "your-client-secret";             // Required for introspection
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.FormData; // Default: FormData
-
-    // Token validation settings
-    options.ValidateIssuer = true;                                         // Default: true
-    options.ValidateAudience = true;                                       // Default: true
-    options.ValidateLifetime = true;                                       // Default: true
-    options.ValidateIssuerSigningKey = true;                               // Default: true
-
-    // JWT validation
-    options.ValidAlgorithms = new[] { "RS256" };                           // Default: RS256
-    options.TokenTypes = new[] { "at+jwt" };                               // Default: at+jwt
-    options.IntrospectionTokenTypes = new[] { "access_token" };            // Optional
-
-    // JWKS caching
-    options.JwksCacheDurationHours = 24;                                   // Default: 24 hours
-    options.JwksRefreshIntervalMinutes = 5;                                // Default: 5 minutes
-    options.JwksAllowedHosts = new[] { "keys.guardhouse.cloud" };          // Optional
-
-    // Introspection caching (micro-cache for burst traffic)
-    options.IntrospectionCacheTtlSeconds = 5;                              // Default: 5 seconds
-    options.IntrospectionNegativeCacheTtlSeconds = 10;                     // Default: 10 seconds
-
-    // HTTPS and metadata
-    options.RequireHttps = true;                                           // Default: true
-    options.RequireHttpsMetadata = null;                                   // Default: derived from authority
-    options.SaveToken = false;                                             // Default: false
-
-    options.RequestTimeoutSeconds = 30;                                    // Default: 30
-    options.MaxRetryAttempts = 3;                                          // Default: 3
-    options.EnableDebug = false;                                           // Default: false
-});
-```
-
-## Features
-
-### Token Management
-
-✅ **Automatic Token Caching** - Tokens cached in memory with configurable expiration buffer
-
-✅ **Automatic Token Refresh** - Uses refresh tokens when available
-
-✅ **HTTP Resilience** - Retry and timeout policies with Polly
-
-✅ **Client Introspection** - Optional RFC 7662 introspection for debugging
-
-### Resource Server Validation
-
-✅ **JWT Signature Validation** - JWKS discovery with lazy refresh on unknown keys
-
-✅ **Introspection Mode** - RFC 7662 validation with micro-cache and negative cache
-
-✅ **Configurable Validation Rules** - Issuer, audience, lifetime, algorithms, token types
-
-✅ **Backchannel Hardening** - Allowed hosts and HTTPS enforcement for metadata/JWKS
-
-### Developer Experience
-
-✅ **Configuration Validation** - Fails fast at startup for missing required settings
-
-✅ **Dependency Injection** - AddGuardhouseClient, AddGuardhouseResource, AddGuardhouse
-
-✅ **Logging Integration** - Debug logging for token and JWKS diagnostics
-
-## API Reference
-
-### Client Service
+Token client:
 
 ```csharp
 public interface IGuardhouseTokenService
@@ -291,12 +201,12 @@ public interface IGuardhouseTokenService
     Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
     Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken = default);
     Task<TokenResponse> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
-    Task<IntrospectionResponse> IntrospectTokenAsync(string token, CancellationToken cancellationToken = default);
-    Task<bool> IsTokenActiveAsync(string token, CancellationToken cancellationToken = default);
+    Task<IntrospectionResponse> IntrospectTokenAsync(string tokenValue, CancellationToken cancellationToken = default);
+    Task<bool> IsTokenActiveAsync(string tokenValue, CancellationToken cancellationToken = default);
 }
 ```
 
-### Resource Service
+Resource service:
 
 ```csharp
 public interface IGuardhouseResourceService
@@ -307,212 +217,54 @@ public interface IGuardhouseResourceService
 }
 ```
 
-## Security Features
+System API clients:
 
-### Validation Modes
+- `IGuardhouseUsersClient` for create/get/update user operations, password changes, role assignment, block/unblock, and personal-data deletion
+- `IGuardhouseRolesClient` for create/get/update role operations and role-permission assignment
+- `IGuardhousePermissionsClient` for create/get/update permission operations
+- `IGuardhouseUserService` remains available as a backward-compatible alias of `IGuardhouseUsersClient`
 
-**JWT Signature Mode** (Default):
-- Uses OpenID configuration and JWKS for token validation
-- Automatic key rotation support with lazy refresh on unknown kid
-- Validates signature, issuer, audience, lifetime, algorithm, token type
+Detailed system API usage and endpoint mapping are documented in the [System API Guide](https://github.com/legiosoft/guardhouse-sdk-dotnet/blob/main/docs/SYSTEM_API.md).
 
-**Introspection Mode** (RFC 7662):
-- Validates tokens via Guardhouse introspection endpoint
-- Client credentials required for introspection calls
-- Micro-cache for burst traffic handling with positive/negative TTLs
+## Configuration Notes
 
-### Validation Checks
+- `Authority` is required for token acquisition and resource-server validation.
+- `ApiBaseUrl` is the base URL for the external system API.
+- If `ApiBaseUrl` is omitted, the SDK falls back to `Authority`.
+- The intended scope for the system API is `AuthorizationConsts.Scopes.SystemApi` (`system_api`).
+- For refresh tokens, enable `IncludeOfflineAccessScope` or include `offline_access` explicitly in `Scope`.
+- You can register Guardhouse services from multiple startup paths without duplicating the SDK's internal DI infrastructure.
 
-- Algorithm allowlist with explicit rejection of "none"
-- Token type allowlist (default: `at+jwt`)
-- Issuer and audience validation with normalized issuer matching
-- Lifetime validation with clock skew
-- HTTPS requirement and allowed host checks for metadata/JWKS/introspection
+## Security And Reliability
 
-### JWKS Caching with Lazy Refresh
+- JWT validation uses issuer, audience, lifetime, and signing-key checks from Guardhouse metadata
+- JWKS refresh is lazy and triggered when unknown signing keys are encountered
+- Introspection mode does not silently fall back to signature validation
+- HTTP calls use retry and timeout policies to handle transient failures
+- Error messages sanitize server responses instead of returning raw bodies
 
-The SDK implements "Lazy Refresh on Unknown Key" strategy:
+## System API Coverage
 
-1. Extract `kid` (Key ID) from incoming JWT token header
-2. Check local cache for key
-3. If key exists: Validate signature (fast path)
-4. If key missing: Trigger JWKS refresh via discovery or `/.well-known/jwks`
-5. Re-check cache and validate with new keys
+The SDK system API surface is intentionally limited to the external routes exposed by Guardhouse under:
 
-This ensures your API accepts valid tokens even after key rotation, while using configurable cache and refresh intervals for regular refresh behavior.
+- `Endpoints/API/Users`
+- `Endpoints/API/Roles`
+- `Endpoints/API/Permissions`
 
-### Introspection Micro-Cache Strategy
-
-The SDK implements a micro-cache for introspection results:
-
-- **Active TTL**: 5 seconds (default)
-- **Inactive TTL**: 10 seconds (default)
-- **Purpose**: Handles burst traffic while keeping revocation checks near real-time
-
-Use introspection mode when you need real-time revocation checking, and tune TTLs to balance freshness and throughput.
+If a route is not part of those external endpoint folders, it is not part of the supported SDK system API contract.
 
 ## Examples
 
-### Calling Protected APIs
-
-```csharp
-public class ExternalApiService
-{
-    private readonly IGuardhouseTokenService _tokenService;
-
-    public ExternalApiService(IGuardhouseTokenService tokenService)
-    {
-        _tokenService = tokenService;
-    }
-
-    public async Task<string> CallProtectedEndpoint()
-    {
-        var accessToken = await _tokenService.GetAccessTokenAsync();
-
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-
-        var response = await client.GetAsync("https://protected-api.com/data");
-        return await response.Content.ReadAsStringAsync();
-    }
-}
-```
-
-### Protecting Endpoints
-
-```csharp
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-
-[ApiController]
-[Route("api/[controller]")]
-public class ProductsController : ControllerBase
-{
-    [HttpGet]
-    public IActionResult GetAll()
-    {
-        return Ok(new[] { "Product 1", "Product 2" });
-    }
-
-    [HttpPost]
-    [Authorize]
-    public IActionResult Create([FromBody] CreateProductRequest request)
-    {
-        return CreatedAtAction(nameof(GetById), new { id = 1 }, request);
-    }
-
-    [HttpDelete("{id}")]
-    [Authorize]
-    public IActionResult Delete(int id)
-    {
-        return Ok(new { Message = $"Product {id} deleted" });
-    }
-}
-```
-
-### Authorization Policies
-
-```csharp
-builder.Services.AddAuthorization(options =>
-{
-    // Require specific scope
-    options.AddPolicy("ReadAccess", policy =>
-        policy.RequireClaim("scope", "read"));
-
-    // Require admin role
-    options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole("admin"));
-
-    // Require multiple conditions
-    options.AddPolicy("CanManage", policy =>
-        policy.RequireClaim("scope", "manage")
-              .RequireRole("manager"));
-});
-
-[HttpGet("admin")]
-[Authorize(Policy = "AdminOnly")]
-public IActionResult AdminEndpoint()
-{
-    return Ok("Admin data");
-}
-```
-
-## Dependencies
-
-- .NET 6.0 or later (supports .NET 6.0, 7.0, 8.0, 9.0, 10.0)
-- Microsoft.Extensions.DependencyInjection
-- Microsoft.Extensions.Http
-- Microsoft.Extensions.Http.Polly
-- Microsoft.Extensions.Caching.Memory
-- Microsoft.Extensions.Options
-- Microsoft.AspNetCore.Authentication.JwtBearer
-- System.IdentityModel.Tokens.Jwt
-- System.Text.Json
-- NodaTime
-- Polly
-
-## Troubleshooting
-
-### Configuration Errors
-
-**Error: "IntrospectionClientId is required when ValidationMode is set to Introspection"**
-
-Add introspection credentials to your configuration:
-
-```csharp
-builder.Services.AddGuardhouseResource(options =>
-{
-    options.ValidationMode = TokenValidationMode.Introspection;
-    options.IntrospectionClientId = "your-client-id";
-    options.IntrospectionClientSecret = "your-client-secret";
-});
-```
-
-### Token Validation Issues
-
- **Error: "401 Unauthorized"**
-
-1. Verify your Guardhouse credentials are correct
-2. Check that Authority URL matches your Guardhouse instance
-3. Ensure client is enabled in Guardhouse Cloud
-4. Verify token hasn't expired
-
-**Error: "invalid_client" when using introspection**
-
-If your identity server requires Basic Authentication headers, switch to BasicAuth credential transmission:
-
-```csharp
-builder.Services.AddGuardhouseResource(options =>
-{
-    options.ValidationMode = TokenValidationMode.Introspection;
-    options.IntrospectionCredentialTransmission = IntrospectionCredentialTransmission.BasicAuth;
-});
-```
-
-This sends credentials in the HTTP `Authorization: Basic` header.
-
-### JWKS Refresh Issues
-
-**Error: "kid not found" or signature validation fails**
-
-1. Check your Authority URL is correct
-2. Verify Guardhouse server is accessible
-3. Check that `JwksRefreshIntervalMinutes` is appropriate (default 5)
-4. Check application logs for JWKS refresh errors
+- Example client app: [examples/ExampleClient](https://github.com/legiosoft/guardhouse-sdk-dotnet/tree/main/examples/ExampleClient)
+- Example resource app: [examples/ExampleResource](https://github.com/legiosoft/guardhouse-sdk-dotnet/tree/main/examples/ExampleResource)
 
 ## Documentation
 
-- Guardhouse Documentation: https://guardhouse.cloud/docs
-- GitHub Issues: https://github.com/legiosoft/guardhouse-sdk-dotnet/issues
-- Deployment Guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Guardhouse Documentation: [guardhouse.cloud/docs](https://guardhouse.cloud/docs/getting-started)
+- System API Guide: [docs/SYSTEM_API.md](https://github.com/legiosoft/guardhouse-sdk-dotnet/blob/main/docs/SYSTEM_API.md)
+- Deployment Guide: [docs/DEPLOYMENT.md](https://github.com/legiosoft/guardhouse-sdk-dotnet/blob/main/docs/DEPLOYMENT.md)
+- GitHub Issues: [guardhouse-sdk-dotnet/issues](https://github.com/legiosoft/guardhouse-sdk-dotnet/issues)
 
 ## License
 
-Licensed under Apache License 2.0
-
-## Support
-
-- Guardhouse Cloud: https://guardhouse.cloud
-- Documentation: https://guardhouse.cloud/docs
-- GitHub Repository: https://github.com/legiosoft/guardhouse-sdk-dotnet
+Apache-2.0
