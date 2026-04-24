@@ -221,6 +221,7 @@ public class ServiceCollectionExtensionsTests
     public void AddGuardhouseResource_WhenCalledMultipleTimes_ShouldRegisterCoreServicesOnce()
     {
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
         services.AddGuardhouseResource(options =>
         {
