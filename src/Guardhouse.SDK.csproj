@@ -8,27 +8,28 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.1</Version>
+        <Version>1.0.2</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
         <Copyright>Copyright (c) LEGIOSOFT SOLUTIONS S.L. 2026</Copyright>
         <Description>
-            Official .NET SDK for Guardhouse Cloud. Provides client credentials flow, JWT signature validation (RFC 7515), and token introspection (RFC 7662). Includes JWKS caching with lazy refresh, configurable validation rules, and HTTP resilience with Polly. Supports .NET 6.0 through .NET 10.0.
+            Official .NET SDK for Guardhouse Cloud. Provides client credentials flow, JWT signature validation (RFC 7515), token introspection (RFC 7662), and typed clients for the external Guardhouse system API. Includes JWKS caching with lazy refresh, configurable validation rules, and HTTP resilience with Polly. Supports .NET 6.0 through .NET 10.0.
         </Description>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <PackageProjectUrl>https://guardhouse.cloud</PackageProjectUrl>
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.1 - patch release with introspection validation reliability fix.
+            1.0.2 - system API alignment and release readiness update.
 
-            Fixes:
-            - Prevent false "Algorithm '' is not allowed" rejections when introspection returns active=true without alg
-            - For JWT tokens, derive alg from JWT header when introspection alg is missing
-            - Keep algorithm allowlist enforcement (including none rejection) and add regression tests
+            Changes:
+            - Align SDK system API clients with the external Users, Roles, and Permissions endpoints
+            - Remove obsolete SDK-only user role, permission, and privacy client surfaces
+            - Add typed roles and permissions clients plus updated request/response models
+            - Refresh README and add dedicated system API documentation for NuGet consumers
         </PackageReleaseNotes>
-        <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly</PackageTags>
+        <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 
         <RepositoryUrl>https://github.com/legiosoft/guardhouse-sdk-dotnet</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
@@ -55,6 +56,12 @@
     <ItemGroup>
         <None Include="../icon.png" Pack="true" PackagePath="\" />
         <None Include="../README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>Guardhouse.sdk.tests</_Parameter1>
+        </AssemblyAttribute>
     </ItemGroup>
 
     <ItemGroup>
