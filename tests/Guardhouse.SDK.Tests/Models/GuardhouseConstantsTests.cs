@@ -67,6 +67,12 @@ public class GuardhouseConstantsTests
     }
 
     [Fact]
+    public void Headers_WebhookSignature_ShouldBeCorrect()
+    {
+        Constants.GuardhouseConstants.Headers.WebhookSignature.Should().Be("X-Hub-Signature");
+    }
+
+    [Fact]
     public void Scopes_OfflineAccess_ShouldBeCorrect()
     {
         Constants.GuardhouseConstants.Scopes.OfflineAccess.Should().Be("offline_access");
@@ -112,6 +118,18 @@ public class GuardhouseConstantsTests
     public void Defaults_ClockSkewMinutes_ShouldBe5()
     {
         Constants.GuardhouseConstants.Defaults.ClockSkewMinutes.Should().Be(5.0);
+    }
+
+    [Fact]
+    public void Defaults_WebhookSignatureToleranceSeconds_ShouldBe300()
+    {
+        Constants.GuardhouseConstants.Defaults.WebhookSignatureToleranceSeconds.Should().Be(300);
+    }
+
+    [Fact]
+    public void Defaults_WebhookMaxBodySizeBytes_ShouldBe5MiB()
+    {
+        Constants.GuardhouseConstants.Defaults.WebhookMaxBodySizeBytes.Should().Be(5 * 1024 * 1024);
     }
 
     [Fact]

@@ -27,6 +27,7 @@ public static class GuardhouseConstants
     {
         public const string Authorization = "Authorization";
         public const string BearerPrefix = "Bearer ";
+        public const string WebhookSignature = "X-Hub-Signature";
     }
 
     public static class Authentication
@@ -68,6 +69,8 @@ public static class GuardhouseConstants
         public const int IntrospectionCacheTtlSeconds = 5;
         public const int RefreshTokenCacheDurationDays = 30;
         public const int IntrospectionNegativeCacheTtlSeconds = 10;
+        public const int WebhookSignatureToleranceSeconds = 300;
+        public const int WebhookMaxBodySizeBytes = 5 * 1024 * 1024;
     }
 
     public static class Validation

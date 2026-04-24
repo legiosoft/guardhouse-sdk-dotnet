@@ -7,6 +7,7 @@ Use it to:
 - request access tokens with the client credentials flow
 - validate incoming tokens with JWT signature validation or introspection
 - call the external Guardhouse system API for users, roles, and permissions
+- validate Guardhouse webhook signatures in receiver endpoints
 
 Supported frameworks:
 
@@ -27,6 +28,7 @@ dotnet add package Guardhouse.SDK
 - `IGuardhouseTokenService` for token acquisition, refresh, and introspection
 - `IGuardhouseResourceService` for resource-server token validation
 - `IGuardhouseUsersClient`, `IGuardhouseRolesClient`, and `IGuardhousePermissionsClient` for the external system API
+- `GuardhouseWebhookSignatureValidator` for validating signed Guardhouse webhooks
 - DI extensions for client, resource server, and system API registration
 - HTTP resilience with Polly
 - JWKS caching with lazy refresh
@@ -38,6 +40,7 @@ dotnet add package Guardhouse.SDK
 - JWT signature validation using OpenID Connect metadata and JWKS
 - RFC 7662 token introspection for resource-server validation and client-side inspection
 - Typed external system API clients for users, roles, and permissions
+- HMAC-SHA256 webhook signature validation with timestamp replay protection
 - Retry and timeout policies for outbound HTTP calls
 
 ## Quick Start
@@ -169,6 +172,51 @@ Validation modes:
 - `TokenValidationMode.JwtSignature` validates JWTs locally using discovered signing keys
 - `TokenValidationMode.Introspection` validates tokens through the Guardhouse introspection endpoint
 
+### Webhook Receiver
+
+Guardhouse sends webhook signatures in `X-Hub-Signature` using the format `t=<unix seconds>,v1=<hex hmac>`. The signed payload is `<timestamp>.<raw request body>`.
+
+```csharp
+using Guardhouse.SDK.Webhooks;
+
+app.MapPost("/webhooks/guardhouse/user-created", async (HttpRequest request, IConfiguration configuration) =>
+{
+    var secret = configuration["Guardhouse:Webhooks:UserCreatedSecret"];
+    if (string.IsNullOrWhiteSpace(secret))
+    {
+        return Results.StatusCode(StatusCodes.Status500InternalServerError);
+    }
+
+    var isValid = await GuardhouseWebhookSignatureValidator.IsValidAsync(request, secret);
+    if (!isValid)
+    {
+        return Results.BadRequest("Signature verification failed.");
+    }
+
+    using var reader = new StreamReader(request.Body);
+    var json = await reader.ReadToEndAsync();
+
+    // Deserialize and handle the webhook envelope here.
+    return Results.Ok();
+});
+```
+
+`IsValidAsync` validates the timestamped HMAC-SHA256 signature against the raw request body and rewinds the body stream so the endpoint can deserialize the same payload after validation. It rejects bodies over 5 MB by default; pass `maxBodySizeBytes` only when your webhook contract requires a different limit.
+
+For stricter secret-memory handling, use the overloads that accept secret bytes:
+
+```csharp
+var secretBytes = Convert.FromBase64String(configuration["Guardhouse:Webhooks:Secret"]!);
+try
+{
+    var isValid = await GuardhouseWebhookSignatureValidator.IsValidAsync(request, secretBytes);
+}
+finally
+{
+    CryptographicOperations.ZeroMemory(secretBytes);
+}
+```
+
 ## Registration Helpers
 
 Client registration:
@@ -238,6 +286,7 @@ Detailed system API usage and endpoint mapping are documented in the [System API
 ## Security And Reliability
 
 - JWT validation uses issuer, audience, lifetime, and signing-key checks from Guardhouse metadata
+- Webhook validation uses the raw request body, a five-minute timestamp tolerance, a 5 MB default body limit, and fixed-time HMAC comparison
 - JWKS refresh is lazy and triggered when unknown signing keys are encountered
 - Introspection mode does not silently fall back to signature validation
 - HTTP calls use retry and timeout policies to handle transient failures
