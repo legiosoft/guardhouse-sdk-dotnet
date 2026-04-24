@@ -11,7 +11,7 @@ public static class GuardhouseApiRoutes
             return $"{Collection}/{userId}";
         }
 
-        public static string Password(int userId)
+        public static string PasswordChange(int userId)
         {
             return $"{ById(userId)}/password";
         }

@@ -97,7 +97,7 @@ public class GuardhouseUsersClient(
 
         using var response = await SendAuthenticatedRequestAsync(
             HttpMethod.Post,
-            GuardhouseApiRoutes.Users.Password(userId),
+            GuardhouseApiRoutes.Users.PasswordChange(userId),
             request,
             cancellationToken);
 
