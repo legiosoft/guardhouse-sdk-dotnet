@@ -162,16 +162,14 @@ public class GuardhouseTokenService(
                 $"Error: {ex.Message}", ex);
         }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
         if (!response.IsSuccessStatusCode)
         {
+            var errorDetails = await GuardhouseErrorResponseSanitizer.SummarizeAsync(response.Content, cancellationToken);
             logger.LogError(
-                "Token request failed with status {StatusCode}. Response: {Response}",
+                "Token request failed with status {StatusCode}. {ResponseSummary}",
                 response.StatusCode,
-                responseContent);
+                errorDetails);
 
-            var errorDetails = ParseErrorResponse(responseContent);
             throw new InvalidOperationException(
                 $"Failed to request token from {tokenEndpoint}. " +
                 $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
@@ -180,6 +178,7 @@ public class GuardhouseTokenService(
                 $"Authority: {options1.Authority}, ClientId: {options1.ClientId}, Scope: {options1.Scope}");
         }
 
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -266,16 +265,14 @@ public class GuardhouseTokenService(
                 $"Error: {ex.Message}", ex);
         }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
         if (!response.IsSuccessStatusCode)
         {
+            var errorDetails = await GuardhouseErrorResponseSanitizer.SummarizeAsync(response.Content, cancellationToken);
             logger.LogError(
-                "Token refresh failed with status {StatusCode}. Response: {Response}",
+                "Token refresh failed with status {StatusCode}. {ResponseSummary}",
                 response.StatusCode,
-                responseContent);
+                errorDetails);
 
-            var errorDetails = ParseErrorResponse(responseContent);
             throw new InvalidOperationException(
                 $"Failed to refresh token from {tokenEndpoint}. " +
                 $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
@@ -283,6 +280,7 @@ public class GuardhouseTokenService(
                 $"Your refresh token may have expired.");
         }
 
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -353,16 +351,14 @@ public class GuardhouseTokenService(
                 $"For introspection, you may need to configure IntrospectionClientId and IntrospectionClientSecret in your GuardhouseClientOptions.", ex);
         }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
         if (!response.IsSuccessStatusCode)
         {
+            var errorDetails = await GuardhouseErrorResponseSanitizer.SummarizeAsync(response.Content, cancellationToken);
             logger.LogError(
-                "Introspection request failed with status {StatusCode}. Response: {Response}",
+                "Introspection request failed with status {StatusCode}. {ResponseSummary}",
                 response.StatusCode,
-                responseContent);
+                errorDetails);
 
-            var errorDetails = ParseErrorResponse(responseContent);
             throw new InvalidOperationException(
                 $"Failed to introspect token from {introspectionEndpoint}. " +
                 $"Status: {response.StatusCode} ({(int)response.StatusCode}). " +
@@ -370,6 +366,7 @@ public class GuardhouseTokenService(
                 $"Verify your ClientId and ClientSecret are configured correctly.");
         }
 
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         var introspectionResponse = JsonSerializer.Deserialize<IntrospectionResponse>(responseContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -449,31 +446,6 @@ public class GuardhouseTokenService(
         return options1.RefreshTokenCacheDurationDays > 0
             ? Duration.FromDays(options1.RefreshTokenCacheDurationDays)
             : Duration.Zero;
-    }
-
-    private static string ParseErrorResponse(string responseContent)
-    {
-        try
-        {
-            var errorDoc = JsonDocument.Parse(responseContent);
-            var error = errorDoc.RootElement.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null;
-            var errorDescription = errorDoc.RootElement.TryGetProperty("error_description", out var descProp) ? descProp.GetString() : null;
-
-            if (!string.IsNullOrEmpty(error))
-            {
-                if (!string.IsNullOrEmpty(errorDescription))
-                {
-                    return $"Error: {error}. Description: {errorDescription}";
-                }
-                return $"Error: {error}";
-            }
-        }
-        catch
-        {
-            // Ignore JSON parsing errors
-        }
-
-        return $"Response: {responseContent}";
     }
 
     private static Uri EnsureAuthorityUri(string authority, bool requireHttps)
