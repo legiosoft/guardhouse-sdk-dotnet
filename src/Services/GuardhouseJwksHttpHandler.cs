@@ -2,6 +2,7 @@ namespace Guardhouse.SDK.Services;
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -11,59 +12,111 @@ using Extensions;
 using Microsoft.Extensions.Logging;
 using Polly;
 
-internal class GuardhouseJwksHttpHandler(
-    HttpMessageHandler innerHandler,
-    ILogger<GuardhouseJwksHttpHandler> logger,
-    int maxRetryAttempts,
-    IReadOnlyCollection<string> allowedHosts,
-    bool requireHttps) : DelegatingHandler(innerHandler)
+internal class GuardhouseJwksHttpHandler : DelegatingHandler
 {
     private const int MaxKidLogCount = 10;
+    private const int MaxRedirectCount = 5;
+    private const int MaxInspectableWellKnownResponseBytes = 1024 * 1024;
+    private static readonly TimeSpan MaxRetryAfterDelay = TimeSpan.FromSeconds(30);
 
-    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = BuildRetryPolicy(logger, maxRetryAttempts);
-    private readonly HashSet<string> _allowedHosts = new(allowedHosts, StringComparer.OrdinalIgnoreCase);
+    private readonly ILogger<GuardhouseJwksHttpHandler> _logger;
+    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
+    private readonly HashSet<string> _allowedHosts;
+    private readonly bool _requireHttps;
+
+    public GuardhouseJwksHttpHandler(
+        HttpMessageHandler innerHandler,
+        ILogger<GuardhouseJwksHttpHandler> logger,
+        int maxRetryAttempts,
+        IReadOnlyCollection<string> allowedHosts,
+        bool requireHttps) : base(innerHandler)
+    {
+        _logger = logger;
+        _retryPolicy = BuildRetryPolicy(logger, maxRetryAttempts);
+        _allowedHosts = new HashSet<string>(allowedHosts, StringComparer.OrdinalIgnoreCase);
+        _requireHttps = requireHttps;
+
+        if (innerHandler is HttpClientHandler httpClientHandler)
+        {
+            // Redirects must be evaluated by this handler so every hop is re-validated.
+            httpClientHandler.AllowAutoRedirect = false;
+        }
+        else if (innerHandler is SocketsHttpHandler socketsHttpHandler)
+        {
+            // Guard against callers that pass the transport handler directly.
+            socketsHttpHandler.AllowAutoRedirect = false;
+        }
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var requestUri = request.RequestUri ?? throw new InvalidOperationException("Backchannel request URI is missing.");
-        var requestUrl = requestUri.ToString();
-        var isWellKnownRequest = IsWellKnownRequest(requestUri);
+        ArgumentNullException.ThrowIfNull(request);
 
-        if (requireHttps && !string.Equals(requestUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        var currentRequest = request;
+        var redirectCount = 0;
+        var isWellKnownRequest = IsWellKnownRequest(request.RequestUri);
+
+        while (true)
         {
-            throw new InvalidOperationException("HTTPS is required for metadata and JWKS endpoints.");
-        }
+            var requestUri = currentRequest.RequestUri ?? throw new InvalidOperationException("Backchannel request URI is missing.");
+            ValidateRequestUri(requestUri);
 
-        if (_allowedHosts.Count > 0 && !_allowedHosts.Contains(requestUri.Host))
-        {
-            throw new InvalidOperationException($"Backchannel host is not allowed: {requestUri.Host}");
-        }
+            var requestUrl = requestUri.ToString();
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "Backchannel request: {Method} {Url}", currentRequest.Method, requestUrl);
 
-        logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Backchannel request: {Method} {Url}", request.Method, requestUrl);
-
-        try
-        {
-            var response = isWellKnownRequest
-                ? await _retryPolicy.ExecuteAsync(ct => base.SendAsync(request, ct), cancellationToken)
-                : await base.SendAsync(request, cancellationToken);
-
-            logger.LogDebugIf(logger.IsEnabled(LogLevel.Debug), "Backchannel response: {StatusCode} from {Url}", (int)response.StatusCode, requestUrl);
-
-            if (isWellKnownRequest && response.IsSuccessStatusCode && logger.IsEnabled(LogLevel.Debug))
+            HttpResponseMessage response;
+            try
             {
-                await LogWellKnownResponseAsync(response, cancellationToken);
+                response = isWellKnownRequest
+                    ? await _retryPolicy.ExecuteAsync(ct => base.SendAsync(currentRequest, ct), cancellationToken)
+                    : await base.SendAsync(currentRequest, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                if (isWellKnownRequest)
+                {
+                    _logger.LogError(ex, "JWKS request failed: {Url}", requestUrl);
+                }
+
+                throw;
             }
 
-            return response;
-        }
-        catch (Exception ex)
-        {
-            if (isWellKnownRequest)
+            _logger.LogDebugIf(_logger.IsEnabled(LogLevel.Debug), "Backchannel response: {StatusCode} from {Url}", (int)response.StatusCode, requestUrl);
+
+            if (!IsRedirectStatusCode(response.StatusCode))
             {
-                logger.LogError(ex, "JWKS request failed: {Url}", requestUrl);
+                if (isWellKnownRequest && response.IsSuccessStatusCode && _logger.IsEnabled(LogLevel.Debug))
+                {
+                    await LogWellKnownResponseAsync(response, cancellationToken);
+                }
+
+                return response;
             }
 
-            throw;
+            if (redirectCount >= MaxRedirectCount)
+            {
+                response.Dispose();
+                throw new InvalidOperationException($"Backchannel request exceeded maximum redirect count of {MaxRedirectCount}.");
+            }
+
+            if (!CanFollowRedirect(currentRequest.Method))
+            {
+                response.Dispose();
+                throw new InvalidOperationException(
+                    $"Backchannel redirects are only supported for GET and HEAD requests. Current method: {currentRequest.Method}.");
+            }
+
+            var redirectUri = ResolveRedirectUri(response, requestUri);
+            _logger.LogDebugIf(
+                _logger.IsEnabled(LogLevel.Debug),
+                "Backchannel redirect: {StatusCode} from {From} to {To}",
+                (int)response.StatusCode,
+                requestUrl,
+                redirectUri);
+
+            response.Dispose();
+            currentRequest = CreateRedirectRequest(currentRequest, redirectUri);
+            redirectCount++;
         }
     }
 
@@ -79,10 +132,118 @@ internal class GuardhouseJwksHttpHandler(
                path.Contains(GuardhouseConstants.Endpoints.WellKnownJwks, StringComparison.OrdinalIgnoreCase);
     }
 
+    private void ValidateRequestUri(Uri requestUri)
+    {
+        if (_requireHttps && !string.Equals(requestUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("HTTPS is required for metadata and JWKS endpoints.");
+        }
+
+        if (_allowedHosts.Count > 0 && !_allowedHosts.Contains(requestUri.Host))
+        {
+            throw new InvalidOperationException($"Backchannel host is not allowed: {requestUri.Host}");
+        }
+    }
+
+    private static bool IsRedirectStatusCode(HttpStatusCode statusCode)
+    {
+        return (int)statusCode switch
+        {
+            301 => true,
+            302 => true,
+            303 => true,
+            307 => true,
+            308 => true,
+            _ => false
+        };
+    }
+
+    private static bool CanFollowRedirect(HttpMethod method)
+    {
+        return method == HttpMethod.Get || method == HttpMethod.Head;
+    }
+
+    private static Uri ResolveRedirectUri(HttpResponseMessage response, Uri requestUri)
+    {
+        var location = response.Headers.Location
+            ?? throw new InvalidOperationException("Backchannel redirect response did not include a Location header.");
+        return location.IsAbsoluteUri ? location : new Uri(requestUri, location);
+    }
+
+    private static HttpRequestMessage CreateRedirectRequest(HttpRequestMessage request, Uri redirectUri)
+    {
+        var redirectedRequest = new HttpRequestMessage(request.Method, redirectUri)
+        {
+            Version = request.Version,
+            VersionPolicy = request.VersionPolicy
+        };
+
+        var isCrossAuthorityRedirect = request.RequestUri == null || !HasSameAuthority(request.RequestUri, redirectUri);
+
+        foreach (var header in request.Headers)
+        {
+            if (!ShouldCopyHeaderOnRedirect(header.Key, isCrossAuthorityRedirect))
+            {
+                continue;
+            }
+
+            redirectedRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        return redirectedRequest;
+    }
+
+    private static bool HasSameAuthority(Uri sourceUri, Uri destinationUri)
+    {
+        return string.Equals(sourceUri.Scheme, destinationUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(sourceUri.Host, destinationUri.Host, StringComparison.OrdinalIgnoreCase) &&
+               sourceUri.Port == destinationUri.Port;
+    }
+
+    private static bool ShouldCopyHeaderOnRedirect(string headerName, bool isCrossAuthorityRedirect)
+    {
+        if (string.Equals(headerName, "Host", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!isCrossAuthorityRedirect)
+        {
+            return true;
+        }
+
+        return !string.Equals(headerName, "Authorization", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(headerName, "Cookie", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(headerName, "Proxy-Authorization", StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task LogWellKnownResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var contentBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        logger.LogDebug("Well-known response length: {Length} bytes", contentBytes.Length);
+        var content = response.Content;
+        if (content == null)
+        {
+            _logger.LogDebug("Well-known response had no content.");
+            return;
+        }
+
+        var contentLength = content.Headers.ContentLength;
+        if (!contentLength.HasValue)
+        {
+            _logger.LogDebug("Skipping well-known response inspection because Content-Length is unavailable.");
+            return;
+        }
+
+        if (contentLength.Value > MaxInspectableWellKnownResponseBytes)
+        {
+            _logger.LogWarning(
+                "Skipping well-known response inspection because content length {ContentLength} exceeds the inspection limit of {MaxContentLength} bytes.",
+                contentLength.Value,
+                MaxInspectableWellKnownResponseBytes);
+            return;
+        }
+
+        var contentBytes = await content.ReadAsByteArrayAsync(cancellationToken);
+        _logger.LogDebug("Well-known response length: {Length} bytes", contentBytes.Length);
 
         try
         {
@@ -92,7 +253,7 @@ internal class GuardhouseJwksHttpHandler(
             var jwksUri = TryExtractJwksUri(root);
             if (!string.IsNullOrEmpty(jwksUri))
             {
-                logger.LogDebug("OpenID config points to JWKS URI: {JwksUri}", jwksUri);
+                _logger.LogDebug("OpenID config points to JWKS URI: {JwksUri}", jwksUri);
                 return;
             }
 
@@ -100,19 +261,19 @@ internal class GuardhouseJwksHttpHandler(
             var kidCount = ExtractKids(root, kids);
             if (kidCount == 0)
             {
-                logger.LogWarning("JWKS response contains no kids");
+                _logger.LogWarning("JWKS response contains no kids");
                 return;
             }
 
-            logger.LogDebug("JWKS contains {KidCount} keys", kidCount);
+            _logger.LogDebug("JWKS contains {KidCount} keys", kidCount);
             if (kids.Count > 0)
             {
-                logger.LogDebug("JWKS kids (first {Count}): {Kids}", kids.Count, string.Join(", ", kids));
+                _logger.LogDebug("JWKS kids (first {Count}): {Kids}", kids.Count, string.Join(", ", kids));
             }
         }
         catch (JsonException ex)
         {
-            logger.LogDebug(ex, "Well-known response is not valid JSON.");
+            _logger.LogDebug(ex, "Well-known response is not valid JSON.");
         }
     }
 
@@ -235,18 +396,20 @@ internal class GuardhouseJwksHttpHandler(
             return null;
         }
 
+        TimeSpan? delay = null;
+
         if (retryAfter.Delta.HasValue && retryAfter.Delta.Value > TimeSpan.Zero)
         {
-            return retryAfter.Delta.Value;
+            delay = retryAfter.Delta.Value;
+        }
+        else if (retryAfter.Date.HasValue)
+        {
+            delay = retryAfter.Date.Value - DateTimeOffset.UtcNow;
         }
 
-        if (retryAfter.Date.HasValue)
+        if (delay.HasValue && delay.Value > TimeSpan.Zero)
         {
-            var delay = retryAfter.Date.Value - DateTimeOffset.UtcNow;
-            if (delay > TimeSpan.Zero)
-            {
-                return delay;
-            }
+            return delay.Value > MaxRetryAfterDelay ? MaxRetryAfterDelay : delay.Value;
         }
 
         return null;
