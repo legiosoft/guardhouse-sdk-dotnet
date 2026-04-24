@@ -226,7 +226,7 @@ public static class ServiceCollectionExtensions
             services.AddOptions<GuardhouseUserOptions>()
                 .Validate(options =>
                         string.IsNullOrWhiteSpace(options.ApiBaseUrl) ||
-                        Uri.TryCreate(options.ApiBaseUrl, UriKind.Absolute, out _),
+                        IsValidApiBaseUrl(options.ApiBaseUrl),
                     "ApiBaseUrl must be an absolute URI when provided.")
                 .ValidateOnStart();
 
@@ -510,6 +510,13 @@ public static class ServiceCollectionExtensions
         }
 
         return HasScope(options.Scope, GuardhouseConstants.Scopes.OfflineAccess);
+    }
+
+    private static bool IsValidApiBaseUrl(string apiBaseUrl)
+    {
+        return Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var uri) &&
+            (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasScope(string? scope, string scopeToFind)
