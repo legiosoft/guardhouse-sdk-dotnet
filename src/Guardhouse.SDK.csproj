@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.2</Version>
+        <Version>1.0.3</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,13 +21,12 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.2 - system API alignment and release readiness update.
+            1.0.3 - webhook validation and introspection logging refinement.
 
             Changes:
-            - Align SDK system API clients with the external Users, Roles, and Permissions endpoints
-            - Remove obsolete SDK-only user role, permission, and privacy client surfaces
-            - Add typed roles and permissions clients plus updated request/response models
-            - Refresh README and add dedicated system API documentation for NuGet consumers
+            - Add Guardhouse webhook signature validation helpers
+            - Add byte-secret webhook validation overloads and default 5 MB webhook body limit
+            - Downgrade routine inactive introspection token rejections to debug logging
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

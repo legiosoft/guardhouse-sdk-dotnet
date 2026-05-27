@@ -12,15 +12,15 @@ This guide explains how to build, test, pack, and publish `Guardhouse.SDK` to Nu
 
 ## Release State
 
-Before publishing `1.0.2`, verify these files are aligned:
+Before publishing `1.0.3`, verify these files are aligned:
 
 - `src/Guardhouse.SDK.csproj`
-  - `<Version>1.0.2</Version>`
+  - `<Version>1.0.3</Version>`
   - `<PackageId>Guardhouse.SDK</PackageId>`
   - `<PackageReadmeFile>README.md</PackageReadmeFile>`
   - `<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>`
 - `CHANGELOG.md`
-  - Has `## [1.0.2] - 2026-04-24`
+  - Has `## [1.0.3] - 2026-05-27`
   - `Unreleased` is empty
 - `README.md`
   - Contains NuGet-ready setup examples and current package capabilities
@@ -66,20 +66,20 @@ dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release 
 Create the NuGet package and symbol package:
 
 ```powershell
-dotnet pack .\src\Guardhouse.SDK.csproj -c Release --no-build -o .\artifacts -p:Version=1.0.2
+dotnet pack .\src\Guardhouse.SDK.csproj -c Release --no-build -o .\artifacts -p:Version=1.0.3
 ```
 
 Expected outputs:
 
 ```text
-artifacts\Guardhouse.SDK.1.0.2.nupkg
-artifacts\Guardhouse.SDK.1.0.2.snupkg
+artifacts\Guardhouse.SDK.1.0.3.nupkg
+artifacts\Guardhouse.SDK.1.0.3.snupkg
 ```
 
 Verify the package files exist:
 
 ```powershell
-Get-ChildItem .\artifacts\Guardhouse.SDK.1.0.2*.nupkg, .\artifacts\Guardhouse.SDK.1.0.2*.snupkg
+Get-ChildItem .\artifacts\Guardhouse.SDK.1.0.3*.nupkg, .\artifacts\Guardhouse.SDK.1.0.3*.snupkg
 ```
 
 ## Publish To NuGet.org
@@ -93,7 +93,7 @@ $env:NUGET_API_KEY = 'YOUR_NUGET_API_KEY'
 Push the package:
 
 ```powershell
-dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.2.nupkg `
+dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.3.nupkg `
   --source https://api.nuget.org/v3/index.json `
   --api-key $env:NUGET_API_KEY `
   --skip-duplicate
@@ -102,7 +102,7 @@ dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.2.nupkg `
 Push the symbols package:
 
 ```powershell
-dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.2.snupkg `
+dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.3.snupkg `
   --source https://api.nuget.org/v3/index.json `
   --api-key $env:NUGET_API_KEY `
   --skip-duplicate
@@ -110,7 +110,7 @@ dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.2.snupkg `
 
 After publishing, check the package page:
 
-- `https://www.nuget.org/packages/Guardhouse.SDK/1.0.2`
+- `https://www.nuget.org/packages/Guardhouse.SDK/1.0.3`
 
 NuGet package indexing can take a few minutes.
 
@@ -119,8 +119,8 @@ NuGet package indexing can take a few minutes.
 After the package is published and verified, tag the release:
 
 ```powershell
-git tag -a v1.0.2 -m "Release version 1.0.2"
-git push origin v1.0.2
+git tag -a v1.0.3 -m "Release version 1.0.3"
+git push origin v1.0.3
 ```
 
 ## GitHub Actions
@@ -142,7 +142,7 @@ It performs:
 - `dotnet test guardhouse-sdk-dotnet.sln --no-build -c Release`
 - test result artifact upload
 
-It does not publish packages to NuGet.org. Publishing `1.0.2` is a manual step unless a dedicated publish workflow is added later.
+It does not publish packages to NuGet.org. Publishing `1.0.3` is a manual step unless a dedicated publish workflow is added later.
 
 ## Troubleshooting
 
@@ -188,20 +188,20 @@ Check that the package metadata files exist and are included:
 Then rebuild the package:
 
 ```powershell
-dotnet pack .\src\Guardhouse.SDK.csproj -c Release -o .\artifacts -p:Version=1.0.2
+dotnet pack .\src\Guardhouse.SDK.csproj -c Release -o .\artifacts -p:Version=1.0.3
 ```
 
 ## Pre-Publish Checklist
 
 - [ ] `git status --short` contains only intentional release changes
 - [ ] `README.md` is accurate for NuGet consumers
-- [ ] `CHANGELOG.md` has the `1.0.2` release section
-- [ ] `src/Guardhouse.SDK.csproj` version is `1.0.2`
+- [ ] `CHANGELOG.md` has the `1.0.3` release section
+- [ ] `src/Guardhouse.SDK.csproj` version is `1.0.3`
 - [ ] `dotnet build .\guardhouse-sdk-dotnet.sln -c Release --no-restore` passes
 - [ ] `dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release --no-build` passes or known failures are documented
-- [ ] `artifacts\Guardhouse.SDK.1.0.2.nupkg` exists
-- [ ] `artifacts\Guardhouse.SDK.1.0.2.snupkg` exists
-- [ ] Package is visible at `https://www.nuget.org/packages/Guardhouse.SDK/1.0.2`
+- [ ] `artifacts\Guardhouse.SDK.1.0.3.nupkg` exists
+- [ ] `artifacts\Guardhouse.SDK.1.0.3.snupkg` exists
+- [ ] Package is visible at `https://www.nuget.org/packages/Guardhouse.SDK/1.0.3`
 
 ## Support
 

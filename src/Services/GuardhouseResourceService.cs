@@ -73,7 +73,7 @@ public class GuardhouseResourceService(
 
             if (identity == null)
             {
-                _logger.LogWarning("Token rejected: {Reason}", failureReason);
+                GuardhouseTokenRejectionLogger.Log(_logger, options.EnableDebug, failureReason);
                 return null;
             }
 

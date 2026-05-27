@@ -93,7 +93,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
 
         if (result.Identity == null)
         {
-            _logger.LogWarning("Token rejected: {Reason}", result.FailureReason);
+            GuardhouseTokenRejectionLogger.Log(_logger, options.Value.EnableDebug, result.FailureReason);
         }
 
         return result;

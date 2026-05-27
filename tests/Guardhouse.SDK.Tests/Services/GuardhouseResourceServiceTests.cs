@@ -9,6 +9,7 @@ using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -37,7 +38,9 @@ public class GuardhouseResourceServiceTests
         });
     }
 
-    private GuardhouseResourceService CreateService(GuardhouseResourceOptions options)
+    private GuardhouseResourceService CreateService(
+        GuardhouseResourceOptions options,
+        ILogger<GuardhouseResourceService>? logger = null)
     {
         var jwtOptions = new JwtBearerOptions
         {
@@ -63,7 +66,8 @@ public class GuardhouseResourceServiceTests
             _mockIntrospectionService.Object,
             _mockSchemeProvider.Object,
             Options.Create(options),
-            _mockJwtBearerOptions.Object);
+            _mockJwtBearerOptions.Object,
+            logger);
     }
 
     #region ValidateTokenAsync Tests
@@ -123,6 +127,30 @@ public class GuardhouseResourceServiceTests
         var principal = await _service.ValidateTokenAsync("test_token");
 
         principal.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_WithInactiveToken_ShouldNotLogWarning()
+    {
+        var logger = new Mock<ILogger<GuardhouseResourceService>>();
+        var service = CreateService(new GuardhouseResourceOptions
+        {
+            Authority = "https://auth.example.com",
+            Audience = "api",
+            ValidationMode = TokenValidationMode.Introspection
+        }, logger.Object);
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("test_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = false
+            });
+
+        var principal = await service.ValidateTokenAsync("test_token");
+
+        principal.Should().BeNull();
+        VerifyNoWarningLog(logger);
     }
 
     [Fact]
@@ -211,5 +239,17 @@ public class GuardhouseResourceServiceTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private static void VerifyNoWarningLog<T>(Mock<ILogger<T>> logger)
+    {
+        logger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((_, _) => true),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 }

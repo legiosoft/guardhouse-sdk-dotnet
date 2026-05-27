@@ -5,6 +5,7 @@ using Guardhouse.SDK.Constants;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -69,6 +70,28 @@ public class GuardhouseJwtBearerEventsTests
 
         context.Result.Should().NotBeNull();
         context.Result?.Succeeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TokenValidated_WithInactiveToken_ShouldNotLogWarning()
+    {
+        var logger = new Mock<ILogger<GuardhouseIntrospectionJwtBearerEvents>>();
+        var events = new GuardhouseIntrospectionJwtBearerEvents(
+            _mockOptions.Object,
+            _mockIntrospectionService.Object,
+            logger.Object);
+        var context = CreateTokenValidatedContext(token: "inactive_token");
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("inactive_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = false
+            });
+
+        await events.TokenValidated(context);
+
+        VerifyNoWarningLog(logger);
     }
 
     [Fact]
@@ -376,5 +399,17 @@ public class GuardhouseJwtBearerEventsTests
         };
 
         return context;
+    }
+
+    private static void VerifyNoWarningLog<T>(Mock<ILogger<T>> logger)
+    {
+        logger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((_, _) => true),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 }

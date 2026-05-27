@@ -516,7 +516,7 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
 
         if (identity == null)
         {
-            _logger.LogWarning("Token rejected: {Reason}", failureReason);
+            GuardhouseTokenRejectionLogger.Log(_logger, _resourceOptions.Value.EnableDebug, failureReason);
             return InvalidResult(failureReason ?? "Token validation failed");
         }
 

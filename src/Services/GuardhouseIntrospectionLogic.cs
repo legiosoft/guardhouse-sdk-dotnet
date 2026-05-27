@@ -12,6 +12,8 @@ using Models;
 
 internal static class GuardhouseIntrospectionLogic
 {
+    internal const string TokenInactiveFailureReason = "Token is not active";
+
     private static readonly HashSet<string> StandardIntrospectionClaimNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "active",
@@ -41,7 +43,7 @@ internal static class GuardhouseIntrospectionLogic
     {
         if (!introspectionResult.Active)
         {
-            return (null, "Token is not active");
+            return (null, TokenInactiveFailureReason);
         }
 
         if (!IsTokenTypeAllowed(introspectionResult.TokenType, resourceOptions.IntrospectionTokenTypes))
@@ -111,6 +113,11 @@ internal static class GuardhouseIntrospectionLogic
                 target.AddClaim(claim);
             }
         }
+    }
+
+    internal static bool IsRoutineTokenRejection(string? failureReason)
+    {
+        return string.Equals(failureReason, TokenInactiveFailureReason, StringComparison.Ordinal);
     }
 
     private sealed class ClaimTypeValueComparer : IEqualityComparer<Claim>

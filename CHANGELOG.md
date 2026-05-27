@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-05-27
+
 ### Added
 - Added `GuardhouseWebhookSignatureValidator` for validating Guardhouse webhook receiver signatures
 - Added byte-secret webhook validation overloads and a default 5 MB webhook body limit
+
+### Changed
+- Downgraded routine inactive introspection token rejections to debug logging to avoid warning-level observability noise for expected 401 traffic
 
 ## [1.0.2] - 2026-04-24
 
