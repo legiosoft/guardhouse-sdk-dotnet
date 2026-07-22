@@ -267,7 +267,7 @@ public interface IGuardhouseResourceService
 
 System API clients:
 
-- `IGuardhouseUsersClient` for create/get/update user operations, password changes, role assignment, block/unblock, and personal-data deletion
+- `IGuardhouseUsersClient` for create/get/update user operations, password and email changes, role assignment, block/unblock, and personal-data deletion
 - `IGuardhouseRolesClient` for create/get/update role operations and role-permission assignment
 - `IGuardhousePermissionsClient` for create/get/update permission operations
 - `IGuardhouseUserService` remains available as a backward-compatible alias of `IGuardhouseUsersClient`

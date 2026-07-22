@@ -20,6 +20,11 @@ public interface IGuardhouseUsersClient
 
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request, CancellationToken cancellationToken = default);
 
+    Task<bool> RequestEmailChangeAsync(
+        int userId,
+        RequestEmailChangeRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<bool> AssignUserToRoleAsync(int userId, int roleId, CancellationToken cancellationToken = default);
 
     Task<bool> UnassignUserFromRoleAsync(

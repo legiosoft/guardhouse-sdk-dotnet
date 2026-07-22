@@ -135,6 +135,17 @@ var changed = await usersClient.ChangePasswordAsync(42, new ChangePasswordReques
 });
 ```
 
+### Request email change
+
+This sends a confirmation link to the proposed email address. Guardhouse changes the email only after the user follows that link and the address is still available.
+
+```csharp
+var requested = await usersClient.RequestEmailChangeAsync(42, new RequestEmailChangeRequest
+{
+    NewEmail = "ada.updated@example.com"
+});
+```
+
 ### Endpoint mapping
 
 | Route | Method | SDK method |
@@ -144,6 +155,7 @@ var changed = await usersClient.ChangePasswordAsync(42, new ChangePasswordReques
 | `api/v1/users/{userId}` | `GET` | `GetUserByIdAsync(int)` |
 | `api/v1/users/{userId}` | `PUT` | `UpdateUserAsync(int, UpdateUserRequest)` |
 | `api/v1/users/{userId}/password` | `POST` | `ChangePasswordAsync(int, ChangePasswordRequest)` |
+| `api/v1/users/{userId}/email` | `POST` | `RequestEmailChangeAsync(int, RequestEmailChangeRequest)` |
 | `api/v1/users/{userId}/roles/{roleId}` | `POST` | `AssignUserToRoleAsync(int, int)` |
 | `api/v1/users/{userId}/roles/{roleId}` | `DELETE` | `UnassignUserFromRoleAsync(int, int, UnassignUserFromRoleRequest)` |
 | `api/v1/users/{userId}/block` | `PATCH` | `BlockUserAsync(int, BlockUserRequest)` |

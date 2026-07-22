@@ -118,6 +118,26 @@ public class UsersController : ControllerBase
         }
     }
 
+    [HttpPost("{userId:int}/email")]
+    public async Task<ActionResult> RequestEmailChange(int userId, [FromBody] RequestEmailChangeRequest request)
+    {
+        try
+        {
+            var requested = await _usersClient.RequestEmailChangeAsync(userId, request);
+            return requested ? NoContent() : NotFound(new { Message = "User not found" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Failed to request Guardhouse user email change {UserId}", userId);
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error requesting Guardhouse user email change {UserId}", userId);
+            return StatusCode(500, new { Message = "An unexpected error occurred", Error = ex.Message });
+        }
+    }
+
     [HttpPost("{userId:int}/roles/{roleId:int}")]
     public async Task<ActionResult> AssignRole(int userId, int roleId)
     {

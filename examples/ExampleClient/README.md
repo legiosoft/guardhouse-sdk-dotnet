@@ -44,6 +44,7 @@ Guardhouse system API examples:
 - `GET /api/guardhouse/users/{userId}`
 - `PUT /api/guardhouse/users/{userId}`
 - `POST /api/guardhouse/users/{userId}/password`
+- `POST /api/guardhouse/users/{userId}/email`
 - `POST /api/guardhouse/users/{userId}/roles/{roleId}`
 - `DELETE /api/guardhouse/users/{userId}/roles/{roleId}`
 - `PATCH /api/guardhouse/users/{userId}/block`

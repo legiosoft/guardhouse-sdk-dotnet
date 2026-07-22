@@ -181,6 +181,41 @@ public class GuardhouseApiClientsTests
     }
 
     [Fact]
+    public async Task RequestEmailChangeAsync_ShouldSendExpectedContract()
+    {
+        HttpRequestMessage? sentRequest = null;
+        string? requestBody = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (request, _) =>
+            {
+                sentRequest = request;
+                requestBody = await request.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NoContent
+            });
+
+        var client = CreateUsersClient();
+        var result = await client.RequestEmailChangeAsync(42, new RequestEmailChangeRequest
+        {
+            NewEmail = "ada.updated@example.com"
+        });
+
+        result.Should().BeTrue();
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Method.Should().Be(HttpMethod.Post);
+        sentRequest.RequestUri.Should().Be(new Uri("https://api.guardhouse.test/api/v1/users/42/email"));
+
+        requestBody.Should().NotBeNull();
+        using var bodyDocument = JsonDocument.Parse(requestBody!);
+        bodyDocument.RootElement.GetProperty("newEmail").GetString().Should().Be("ada.updated@example.com");
+    }
+
+    [Fact]
     public async Task GetUserByIdAsync_WithUnknownStatus_ShouldFallbackToUnknown()
     {
         const string json = """

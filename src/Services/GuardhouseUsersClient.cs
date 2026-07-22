@@ -104,6 +104,22 @@ public class GuardhouseUsersClient(
         return await ReturnFalseOnNotFoundAsync(response, $"change password for user '{userId}'", cancellationToken);
     }
 
+    public async Task<bool> RequestEmailChangeAsync(
+        int userId,
+        RequestEmailChangeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Post,
+            GuardhouseApiRoutes.Users.EmailChange(userId),
+            request,
+            cancellationToken);
+
+        return await ReturnFalseOnNotFoundAsync(response, $"request email change for user '{userId}'", cancellationToken);
+    }
+
     public async Task<bool> AssignUserToRoleAsync(int userId, int roleId, CancellationToken cancellationToken = default)
     {
         using var response = await SendAuthenticatedRequestAsync(
