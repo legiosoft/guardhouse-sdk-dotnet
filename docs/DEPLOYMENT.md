@@ -12,20 +12,20 @@ This guide explains how to build, test, pack, and publish `Guardhouse.SDK` to Nu
 
 ## Release State
 
-Before publishing `1.0.3`, verify these files are aligned:
+Before publishing `1.0.4`, verify these files are aligned:
 
 - `src/Guardhouse.SDK.csproj`
-  - `<Version>1.0.3</Version>`
+  - `<Version>1.0.4</Version>`
   - `<PackageId>Guardhouse.SDK</PackageId>`
   - `<PackageReadmeFile>README.md</PackageReadmeFile>`
   - `<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>`
 - `CHANGELOG.md`
-  - Has `## [1.0.3] - 2026-05-27`
+  - Has `## [1.0.4] - 2026-07-22`
   - `Unreleased` is empty
 - `README.md`
   - Contains NuGet-ready setup examples and current package capabilities
 - `docs/SYSTEM_API.md`
-  - Documents the users, roles, and permissions system API clients
+  - Documents the users, roles, permissions, and confirmed user email-change system API surfaces
 
 ## Local Build Setup
 
@@ -52,13 +52,13 @@ dotnet build .\guardhouse-sdk-dotnet.sln -c Release --no-restore
 Run the full test project:
 
 ```powershell
-dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release --no-build -v minimal
+dotnet test .\tests\Guardhouse.sdk.tests\Guardhouse.sdk.tests.csproj -c Release --no-build -v minimal
 ```
 
 If you need diagnostic output:
 
 ```powershell
-dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release --no-build --logger "console;verbosity=detailed"
+dotnet test .\tests\Guardhouse.sdk.tests\Guardhouse.sdk.tests.csproj -c Release --no-build --logger "console;verbosity=detailed"
 ```
 
 ## Pack
@@ -66,20 +66,20 @@ dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release 
 Create the NuGet package and symbol package:
 
 ```powershell
-dotnet pack .\src\Guardhouse.SDK.csproj -c Release --no-build -o .\artifacts -p:Version=1.0.3
+dotnet pack .\src\Guardhouse.SDK.csproj -c Release --no-build -o .\artifacts
 ```
 
 Expected outputs:
 
 ```text
-artifacts\Guardhouse.SDK.1.0.3.nupkg
-artifacts\Guardhouse.SDK.1.0.3.snupkg
+artifacts\Guardhouse.SDK.1.0.4.nupkg
+artifacts\Guardhouse.SDK.1.0.4.snupkg
 ```
 
 Verify the package files exist:
 
 ```powershell
-Get-ChildItem .\artifacts\Guardhouse.SDK.1.0.3*.nupkg, .\artifacts\Guardhouse.SDK.1.0.3*.snupkg
+Get-ChildItem .\artifacts\Guardhouse.SDK.1.0.4.nupkg, .\artifacts\Guardhouse.SDK.1.0.4.snupkg
 ```
 
 ## Publish To NuGet.org
@@ -90,27 +90,20 @@ Use an environment variable for the API key so it does not get stored in shell h
 $env:NUGET_API_KEY = 'YOUR_NUGET_API_KEY'
 ```
 
-Push the package:
+Push the package and matching symbols package:
 
 ```powershell
-dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.3.nupkg `
+dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.4.nupkg `
   --source https://api.nuget.org/v3/index.json `
   --api-key $env:NUGET_API_KEY `
   --skip-duplicate
 ```
 
-Push the symbols package:
-
-```powershell
-dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.3.snupkg `
-  --source https://api.nuget.org/v3/index.json `
-  --api-key $env:NUGET_API_KEY `
-  --skip-duplicate
-```
+The .NET CLI also pushes the matching `.snupkg` from the same directory unless `--no-symbols` is specified.
 
 After publishing, check the package page:
 
-- `https://www.nuget.org/packages/Guardhouse.SDK/1.0.3`
+- `https://www.nuget.org/packages/Guardhouse.SDK/1.0.4`
 
 NuGet package indexing can take a few minutes.
 
@@ -119,8 +112,8 @@ NuGet package indexing can take a few minutes.
 After the package is published and verified, tag the release:
 
 ```powershell
-git tag -a v1.0.3 -m "Release version 1.0.3"
-git push origin v1.0.3
+git tag -a v1.0.4 -m "Release version 1.0.4"
+git push origin v1.0.4
 ```
 
 ## GitHub Actions
@@ -142,7 +135,7 @@ It performs:
 - `dotnet test guardhouse-sdk-dotnet.sln --no-build -c Release`
 - test result artifact upload
 
-It does not publish packages to NuGet.org. Publishing `1.0.3` is a manual step unless a dedicated publish workflow is added later.
+It does not publish packages to NuGet.org. Publishing `1.0.4` is a manual step unless a dedicated publish workflow is added later.
 
 ## Troubleshooting
 
@@ -188,20 +181,20 @@ Check that the package metadata files exist and are included:
 Then rebuild the package:
 
 ```powershell
-dotnet pack .\src\Guardhouse.SDK.csproj -c Release -o .\artifacts -p:Version=1.0.3
+dotnet pack .\src\Guardhouse.SDK.csproj -c Release -o .\artifacts
 ```
 
 ## Pre-Publish Checklist
 
 - [ ] `git status --short` contains only intentional release changes
 - [ ] `README.md` is accurate for NuGet consumers
-- [ ] `CHANGELOG.md` has the `1.0.3` release section
-- [ ] `src/Guardhouse.SDK.csproj` version is `1.0.3`
+- [ ] `CHANGELOG.md` has the `1.0.4` release section
+- [ ] `src/Guardhouse.SDK.csproj` version is `1.0.4`
 - [ ] `dotnet build .\guardhouse-sdk-dotnet.sln -c Release --no-restore` passes
-- [ ] `dotnet test .\tests\Guardhouse.SDK.Tests\Guardhouse.sdk.tests.csproj -c Release --no-build` passes or known failures are documented
-- [ ] `artifacts\Guardhouse.SDK.1.0.3.nupkg` exists
-- [ ] `artifacts\Guardhouse.SDK.1.0.3.snupkg` exists
-- [ ] Package is visible at `https://www.nuget.org/packages/Guardhouse.SDK/1.0.3`
+- [ ] `dotnet test .\tests\Guardhouse.sdk.tests\Guardhouse.sdk.tests.csproj -c Release --no-build` passes or known failures are documented
+- [ ] `artifacts\Guardhouse.SDK.1.0.4.nupkg` exists
+- [ ] `artifacts\Guardhouse.SDK.1.0.4.snupkg` exists
+- [ ] Package is visible at `https://www.nuget.org/packages/Guardhouse.SDK/1.0.4`
 
 ## Support
 
