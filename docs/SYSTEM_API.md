@@ -135,6 +135,11 @@ var changed = await usersClient.ChangePasswordAsync(42, new ChangePasswordReques
 });
 ```
 
+`CurrentPassword` is required when the user already has a password. Set it to `null`
+only when adding the first password to a passwordless account. The method returns
+`false` when the user does not exist and throws for validation or authentication
+failures.
+
 ### Request email change
 
 This sends a confirmation link to the proposed email address. Guardhouse changes the email only after the user follows that link and the address is still available.

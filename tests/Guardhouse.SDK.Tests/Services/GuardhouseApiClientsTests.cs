@@ -154,6 +154,94 @@ public class GuardhouseApiClientsTests
     }
 
     [Fact]
+    public async Task ChangePasswordAsync_ShouldSendExpectedContract()
+    {
+        HttpRequestMessage? sentRequest = null;
+        string? requestBody = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (request, _) =>
+            {
+                sentRequest = request;
+                requestBody = await request.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NoContent
+            });
+
+        var client = CreateUsersClient();
+        var result = await client.ChangePasswordAsync(42, new ChangePasswordRequest
+        {
+            CurrentPassword = "CurrentStrongPassword123!",
+            NewPassword = "NewStrongPassword123!"
+        });
+
+        result.Should().BeTrue();
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Method.Should().Be(HttpMethod.Post);
+        sentRequest.RequestUri.Should().Be(new Uri("https://api.guardhouse.test/api/v1/users/42/password"));
+
+        requestBody.Should().NotBeNull();
+        using var bodyDocument = JsonDocument.Parse(requestBody!);
+        bodyDocument.RootElement.GetProperty("currentPassword").GetString().Should().Be("CurrentStrongPassword123!");
+        bodyDocument.RootElement.GetProperty("newPassword").GetString().Should().Be("NewStrongPassword123!");
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ForPasswordlessUser_ShouldSerializeNullCurrentPassword()
+    {
+        string? requestBody = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>(async (request, _) =>
+            {
+                requestBody = await request.Content!.ReadAsStringAsync();
+            })
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NoContent
+            });
+
+        var client = CreateUsersClient();
+        var result = await client.ChangePasswordAsync(42, new ChangePasswordRequest
+        {
+            CurrentPassword = null,
+            NewPassword = "NewStrongPassword123!"
+        });
+
+        result.Should().BeTrue();
+        requestBody.Should().NotBeNull();
+        using var bodyDocument = JsonDocument.Parse(requestBody!);
+        bodyDocument.RootElement.GetProperty("currentPassword").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenUserDoesNotExist_ShouldReturnFalse()
+    {
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NotFound
+            });
+
+        var client = CreateUsersClient();
+        var result = await client.ChangePasswordAsync(999, new ChangePasswordRequest
+        {
+            CurrentPassword = "CurrentStrongPassword123!",
+            NewPassword = "NewStrongPassword123!"
+        });
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ChangePasswordAsync_WhenBadRequest_ShouldNotExposeRawResponseBody()
     {
         _mockHttpMessageHandler
