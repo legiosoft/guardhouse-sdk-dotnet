@@ -1,6 +1,7 @@
 namespace Guardhouse.SDK.Models.Users;
 
 using System.Text.Json.Serialization;
+using NodaTime;
 
 public record GetUserByIdResponse
 {
@@ -21,6 +22,10 @@ public record GetUserByIdResponse
 
     [JsonPropertyName("avatarUrl")]
     public string? AvatarUrl { get; init; }
+
+    [JsonPropertyName("lastLogin")]
+    [JsonConverter(typeof(InstantJsonConverter))]
+    public Instant? LastLogin { get; init; }
 
     [JsonPropertyName("roles")]
     public IReadOnlyList<EnumerationModel> Roles { get; init; } = [];

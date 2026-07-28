@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.4</Version>
+        <Version>1.0.5</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,11 +21,10 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.4 - confirmed user email-change support.
+            1.0.5 - add lastLogin to GetUserByIdResponse.
 
             Changes:
-            - Add RequestEmailChangeAsync to the users client
-            - Add the request contract, example endpoint, system API documentation, and tests for the confirmed email-change flow
+            - Add LastLogin to the user-by-id response contract
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

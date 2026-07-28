@@ -312,6 +312,7 @@ public class GuardhouseApiClientsTests
                               "email": "john@example.com",
                               "firstName": "John",
                               "lastName": "Doe",
+                              "lastLogin": "2026-04-22T10:15:30Z",
                               "status": "retired",
                               "roles": [],
                               "systemPermissions": []
@@ -332,6 +333,7 @@ public class GuardhouseApiClientsTests
 
         response.Should().NotBeNull();
         response!.Status.Should().Be(UserStatus.Unknown);
+        response.LastLogin.Should().Be(Instant.FromUtc(2026, 4, 22, 10, 15, 30));
     }
 
     [Fact]
