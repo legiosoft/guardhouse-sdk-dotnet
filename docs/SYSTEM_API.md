@@ -125,6 +125,12 @@ var users = await usersClient.GetUsersAsync(new GetUsersRequest
 });
 ```
 
+### Get user by email
+
+```csharp
+var user = await usersClient.GetUserByEmailAsync("ada@example.com");
+```
+
 ### Change password
 
 ```csharp
@@ -158,6 +164,7 @@ var requested = await usersClient.RequestEmailChangeAsync(42, new RequestEmailCh
 | `api/v1/users` | `POST` | `CreateUserAsync(CreateUserRequest)` |
 | `api/v1/users` | `GET` | `GetUsersAsync(GetUsersRequest)` |
 | `api/v1/users/{userId}` | `GET` | `GetUserByIdAsync(int)` |
+| `api/v1/users/by-email?email={email}` | `GET` | `GetUserByEmailAsync(string)` |
 | `api/v1/users/{userId}` | `PUT` | `UpdateUserAsync(int, UpdateUserRequest)` |
 | `api/v1/users/{userId}/password` | `POST` | `ChangePasswordAsync(int, ChangePasswordRequest)` |
 | `api/v1/users/{userId}/email` | `POST` | `RequestEmailChangeAsync(int, RequestEmailChangeRequest)` |

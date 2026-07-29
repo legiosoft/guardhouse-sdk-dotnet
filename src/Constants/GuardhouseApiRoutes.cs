@@ -11,6 +11,11 @@ public static class GuardhouseApiRoutes
             return $"{Collection}/{userId}";
         }
 
+        public static string ByEmail()
+        {
+            return $"{Collection}/by-email";
+        }
+
         public static string PasswordChange(int userId)
         {
             return $"{ById(userId)}/password";

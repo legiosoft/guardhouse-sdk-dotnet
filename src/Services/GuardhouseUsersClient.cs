@@ -78,6 +78,35 @@ public class GuardhouseUsersClient(
         return result ?? throw new InvalidOperationException("Failed to deserialize GetUserByIdResponse");
     }
 
+    public async Task<GetUserByEmailResponse?> GetUserByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            throw new ArgumentException("Email must not be empty.", nameof(email));
+        }
+
+        var path = AppendQueryString(
+            GuardhouseApiRoutes.Users.ByEmail(),
+            [new KeyValuePair<string, string?>("email", email)]);
+
+        using var response = await SendAuthenticatedRequestAsync(
+            HttpMethod.Get,
+            path,
+            null,
+            cancellationToken);
+
+        var exists = await ReturnFalseOnNotFoundAsync(response, $"get user by email '{email}'", cancellationToken);
+        if (!exists)
+        {
+            return null;
+        }
+
+        var result = await ReadJsonAsync<GetUserByEmailResponse>(response, cancellationToken);
+        return result ?? throw new InvalidOperationException("Failed to deserialize GetUserByEmailResponse");
+    }
+
     public async Task<bool> UpdateUserAsync(int userId, UpdateUserRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

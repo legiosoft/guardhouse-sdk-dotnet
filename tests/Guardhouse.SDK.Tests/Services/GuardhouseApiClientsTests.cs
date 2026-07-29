@@ -358,6 +358,87 @@ public class GuardhouseApiClientsTests
     }
 
     [Fact]
+    public async Task GetUserByEmailAsync_ShouldBuildExpectedQueryStringAndDeserializeResponse()
+    {
+        HttpRequestMessage? sentRequest = null;
+
+        const string json = """
+                            {
+                              "id": 7,
+                              "firstName": "John",
+                              "lastName": "Doe",
+                              "email": "john+test@example.com",
+                              "roles": [
+                                {
+                                  "id": 1,
+                                  "key": "system.admin",
+                                  "name": "System Admin",
+                                  "description": "Full access"
+                                }
+                              ],
+                              "permissions": [
+                                {
+                                  "id": 2,
+                                  "key": "users.read",
+                                  "name": "Read Users",
+                                  "description": "Can read users"
+                                }
+                              ],
+                              "lastLogin": "2026-04-22T10:15:30Z",
+                              "status": "active",
+                              "isSuspended": false,
+                              "isLocked": false,
+                              "avatarUrl": "https://cdn.guardhouse.test/avatar.png"
+                            }
+                            """;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((request, _) => sentRequest = request)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(json)
+            });
+
+        var client = CreateUsersClient();
+        var response = await client.GetUserByEmailAsync("john+test@example.com");
+
+        response.Should().NotBeNull();
+        response!.Id.Should().Be(7);
+        response.Email.Should().Be("john+test@example.com");
+        response.Roles.Should().ContainSingle().Which.Key.Should().Be("system.admin");
+        response.Permissions.Should().ContainSingle().Which.Key.Should().Be("users.read");
+        response.LastLogin.Should().Be(Instant.FromUtc(2026, 4, 22, 10, 15, 30));
+        response.Status.Should().Be(UserStatus.Active);
+        response.IsSuspended.Should().BeFalse();
+        response.IsLocked.Should().BeFalse();
+        response.AvatarUrl.Should().Be("https://cdn.guardhouse.test/avatar.png");
+
+        sentRequest.Should().NotBeNull();
+        sentRequest!.Method.Should().Be(HttpMethod.Get);
+        sentRequest.RequestUri.Should().Be(new Uri("https://api.guardhouse.test/api/v1/users/by-email?email=john%2Btest%40example.com"));
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WhenUserDoesNotExist_ShouldReturnNull()
+    {
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NotFound
+            });
+
+        var client = CreateUsersClient();
+        var response = await client.GetUserByEmailAsync("missing@example.com");
+
+        response.Should().BeNull();
+    }
+
+    [Fact]
     public async Task DeleteUserPersonalDataAsync_ShouldSendExpectedContract()
     {
         HttpRequestMessage? sentRequest = null;

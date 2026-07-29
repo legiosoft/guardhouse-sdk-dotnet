@@ -21,10 +21,11 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.5 - add lastLogin to GetUserByIdResponse.
+            1.0.5 - add user last-login and email lookup support.
 
             Changes:
             - Add LastLogin to the user-by-id response contract
+            - Add GetUserByEmailAsync to the users client
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

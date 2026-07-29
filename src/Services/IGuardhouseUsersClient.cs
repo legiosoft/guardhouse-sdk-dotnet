@@ -16,6 +16,8 @@ public interface IGuardhouseUsersClient
 
     Task<GetUserByIdResponse?> GetUserByIdAsync(int userId, CancellationToken cancellationToken = default);
 
+    Task<GetUserByEmailResponse?> GetUserByEmailAsync(string email, CancellationToken cancellationToken = default);
+
     Task<bool> UpdateUserAsync(int userId, UpdateUserRequest request, CancellationToken cancellationToken = default);
 
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request, CancellationToken cancellationToken = default);
