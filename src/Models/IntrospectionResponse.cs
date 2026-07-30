@@ -80,7 +80,8 @@ public record IntrospectionResponse
     /// The audience(s) the token is intended for.
     /// </summary>
     [JsonPropertyName("aud")]
-    public string? Aud { get; init; }
+    [JsonConverter(typeof(SingleOrArrayConverter))]
+    public string[]? Aud { get; init; }
 
     /// <summary>
     /// The issuer of the token.

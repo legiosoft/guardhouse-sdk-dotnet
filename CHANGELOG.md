@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-07-30
+
+### Added
+- Added `LastLogin` to the user-by-id response contract
+- Added `GetUserByEmailAsync` to the users client
+
+### Fixed
+- Fixed introspection response parsing when `aud` is returned as an array instead of a string
+- Fixed introspection audience validation and claim mapping to evaluate all returned audience values
+
 ## [1.0.4] - 2026-07-22
 
 ### Added

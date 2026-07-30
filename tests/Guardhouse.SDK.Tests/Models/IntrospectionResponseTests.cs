@@ -163,4 +163,39 @@ public class IntrospectionResponseTests
         claims["system"].GetString().Should().Be("system_administrator");
         claims["business"].ValueKind.Should().Be(JsonValueKind.Array);
     }
+
+    [Fact]
+    public void Aud_ShouldDeserializeFromString()
+    {
+        const string json = """
+                            {
+                              "active": true,
+                              "aud": "resource-api"
+                            }
+                            """;
+
+        var response = JsonSerializer.Deserialize<IntrospectionResponse>(json);
+
+        response.Should().NotBeNull();
+        response!.Aud.Should().Equal("resource-api");
+    }
+
+    [Fact]
+    public void Aud_ShouldDeserializeFromArray()
+    {
+        const string json = """
+                            {
+                              "active": true,
+                              "aud": [
+                                "resource-api",
+                                "guardhouse-api"
+                              ]
+                            }
+                            """;
+
+        var response = JsonSerializer.Deserialize<IntrospectionResponse>(json);
+
+        response.Should().NotBeNull();
+        response!.Aud.Should().Equal("resource-api", "guardhouse-api");
+    }
 }

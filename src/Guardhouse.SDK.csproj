@@ -21,11 +21,13 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.5 - add user last-login and email lookup support.
+            1.0.5 - add user lookup improvements and fix introspection audience parsing.
 
             Changes:
             - Add LastLogin to the user-by-id response contract
             - Add GetUserByEmailAsync to the users client
+            - Accept aud from introspection responses as a single string or string array
+            - Validate and map all parsed audience values to aud claims
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

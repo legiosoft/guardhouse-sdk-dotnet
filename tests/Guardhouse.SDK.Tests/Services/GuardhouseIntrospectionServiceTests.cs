@@ -360,7 +360,7 @@ public class GuardhouseIntrospectionServiceTests
             Active = true,
             Sub = "user123",
             Iss = "https://test-guardhouse.com",
-            Aud = "test-audience",
+            Aud = new[] { "test-audience" },
             Jti = "token-id-123",
             Username = "testuser"
         });
@@ -371,7 +371,7 @@ public class GuardhouseIntrospectionServiceTests
         result.Active.Should().BeTrue();
         result.Sub.Should().Be("user123");
         result.Iss.Should().Be("https://test-guardhouse.com");
-        result.Aud.Should().Be("test-audience");
+        result.Aud.Should().ContainSingle("test-audience");
         result.Jti.Should().Be("token-id-123");
         result.Username.Should().Be("testuser");
     }

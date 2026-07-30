@@ -244,9 +244,9 @@ internal static class GuardhouseIntrospectionLogic
         return false;
     }
 
-    private static bool IsAudienceAllowed(string? audience, TokenValidationParameters validationParameters)
+    private static bool IsAudienceAllowed(string[]? audiences, TokenValidationParameters validationParameters)
     {
-        if (string.IsNullOrWhiteSpace(audience))
+        if (audiences is not { Length: > 0 })
         {
             return false;
         }
@@ -257,7 +257,7 @@ internal static class GuardhouseIntrospectionLogic
             return false;
         }
 
-        foreach (var tokenAudience in SplitAudiences(audience))
+        foreach (var tokenAudience in EnumerateAudiences(audiences))
         {
             if (validAudiences.Contains(tokenAudience))
             {
@@ -296,6 +296,27 @@ internal static class GuardhouseIntrospectionLogic
         return audiences.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
             .Select(audience => audience.Trim())
             .Where(audience => !string.IsNullOrWhiteSpace(audience));
+    }
+
+    private static IEnumerable<string> EnumerateAudiences(IEnumerable<string>? audiences)
+    {
+        if (audiences == null)
+        {
+            yield break;
+        }
+
+        foreach (var audience in audiences)
+        {
+            if (string.IsNullOrWhiteSpace(audience))
+            {
+                continue;
+            }
+
+            foreach (var tokenAudience in SplitAudiences(audience))
+            {
+                yield return tokenAudience;
+            }
+        }
     }
 
     private static string? ValidateLifetime(
@@ -452,10 +473,9 @@ internal static class GuardhouseIntrospectionLogic
             claims.Add(new Claim(GuardhouseConstants.JwtClaims.ClientId, introspectionResult.ClientId));
         }
 
-        if (!string.IsNullOrEmpty(introspectionResult.Aud))
+        if (introspectionResult.Aud is { Length: > 0 })
         {
-            var audiences = SplitAudiences(introspectionResult.Aud);
-            foreach (var audience in audiences)
+            foreach (var audience in EnumerateAudiences(introspectionResult.Aud))
             {
                 claims.Add(new Claim(GuardhouseConstants.JwtClaims.Audience, audience));
             }

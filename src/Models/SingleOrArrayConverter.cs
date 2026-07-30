@@ -27,7 +27,7 @@ public class SingleOrArrayConverter : JsonConverter<string[]>
             return [reader.GetString() ?? string.Empty];
         }
 
-        throw new JsonException($"Unexpected token type: {reader.TokenType}. Expected String or StartArray for field 'role'.");
+        throw new JsonException($"Unexpected token type: {reader.TokenType}. Expected String or StartArray.");
     }
 
     public override void Write(Utf8JsonWriter writer, string[]? value, JsonSerializerOptions options)

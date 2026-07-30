@@ -352,7 +352,7 @@ public class GuardhouseJwtBearerEventsTests
             {
                 Active = true,
                 Sub = "user",
-                Aud = "api1 api2 api3"
+                Aud = new[] { "api1 api2 api3" }
             });
 
         await _events.TokenValidated(context);
@@ -362,6 +362,29 @@ public class GuardhouseJwtBearerEventsTests
         var audienceClaims = principal?.FindAll(GuardhouseConstants.JwtClaims.Audience).ToList();
         audienceClaims.Should().HaveCount(3);
         audienceClaims.Should().OnlyContain(c => new[] { "api1", "api2", "api3" }.Contains(c.Value));
+    }
+
+    [Fact]
+    public async Task TokenValidated_MapsAudiencesFromArray()
+    {
+        var context = CreateTokenValidatedContext(token: "token_with_audience_array");
+
+        _mockIntrospectionService
+            .Setup(x => x.IntrospectTokenAsync("token_with_audience_array", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Aud = new[] { "resource-api", "guardhouse-api" }
+            });
+
+        await _events.TokenValidated(context);
+
+        var principal = context.Principal;
+        principal.Should().NotBeNull();
+        var audienceClaims = principal?.FindAll(GuardhouseConstants.JwtClaims.Audience).ToList();
+        audienceClaims.Should().HaveCount(2);
+        audienceClaims.Should().OnlyContain(c => new[] { "resource-api", "guardhouse-api" }.Contains(c.Value));
     }
 
     #endregion

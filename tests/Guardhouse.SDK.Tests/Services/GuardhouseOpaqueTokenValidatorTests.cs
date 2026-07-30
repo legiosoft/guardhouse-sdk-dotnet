@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Guardhouse.SDK.Models;
 using Guardhouse.SDK.Services;
@@ -52,6 +49,50 @@ public class GuardhouseOpaqueTokenValidatorTests
 
         result.IsValid.Should().BeFalse();
         logger.Messages.Should().NotContain(message => message.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_WithAudienceArray_ShouldAcceptAnyMatchingAudience()
+    {
+        var introspectionService = new Mock<IGuardhouseIntrospectionService>();
+        introspectionService
+            .Setup(x => x.IntrospectTokenAsync("valid_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Aud = new[] { "resource-api", "guardhouse-api" }
+            });
+
+        var services = new ServiceCollection();
+        services.AddSingleton(introspectionService.Object);
+        using var provider = services.BuildServiceProvider();
+
+        var logger = new RecordingLogger<GuardhouseOpaqueTokenValidator>();
+        var validator = new GuardhouseOpaqueTokenValidator(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new GuardhouseResourceOptions
+            {
+                Authority = "https://auth.example.com",
+                Audience = "guardhouse-api",
+                ValidationMode = TokenValidationMode.Introspection
+            }),
+            logger);
+
+        var result = await validator.ValidateTokenAsync(
+            "valid_token",
+            new TokenValidationParameters
+            {
+                ValidateIssuer = false,
+                ValidateAudience = true,
+                ValidAudience = "guardhouse-api",
+                ValidateLifetime = false
+            });
+
+        result.IsValid.Should().BeTrue();
+        result.ClaimsIdentity.Should().NotBeNull();
+        result.ClaimsIdentity!.FindAll("aud").Select(claim => claim.Value)
+            .Should().BeEquivalentTo("resource-api", "guardhouse-api");
     }
 
     private sealed class RecordingLogger<T> : ILogger<T>
