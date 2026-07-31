@@ -342,7 +342,7 @@ public class GuardhouseJwtBearerEventsTests
     }
 
     [Fact]
-    public async Task TokenValidated_MapsMultipleAudiences()
+    public async Task TokenValidated_PreservesAudienceValueWithDelimiters()
     {
         var context = CreateTokenValidatedContext(token: "token_with_audiences");
 
@@ -352,7 +352,7 @@ public class GuardhouseJwtBearerEventsTests
             {
                 Active = true,
                 Sub = "user",
-                Aud = new[] { "api1 api2 api3" }
+                Aud = new[] { "api1 api2,api3" }
             });
 
         await _events.TokenValidated(context);
@@ -360,8 +360,8 @@ public class GuardhouseJwtBearerEventsTests
         var principal = context.Principal;
         principal.Should().NotBeNull();
         var audienceClaims = principal?.FindAll(GuardhouseConstants.JwtClaims.Audience).ToList();
-        audienceClaims.Should().HaveCount(3);
-        audienceClaims.Should().OnlyContain(c => new[] { "api1", "api2", "api3" }.Contains(c.Value));
+        audienceClaims.Should().ContainSingle();
+        audienceClaims![0].Value.Should().Be("api1 api2,api3");
     }
 
     [Fact]

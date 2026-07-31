@@ -24,10 +24,8 @@ public class TokenInfoController : ControllerBase
     public ActionResult GetTokenInfo()
     {
         var accessToken = Request.Headers.Authorization.ToString();
-        var audiences = User.FindAll(GuardhouseConstants.JwtClaims.Audience)
-            .SelectMany(claim => ParseDelimitedValues(claim.Value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var audiences = ParseAudiences(
+            User.FindAll(GuardhouseConstants.JwtClaims.Audience).Select(claim => claim.Value));
         
         var scopes = User.FindAll(GuardhouseConstants.JwtClaims.Scope)
             .Concat(User.FindAll("scp"))
@@ -169,7 +167,7 @@ public class TokenInfoController : ControllerBase
             var introspection = await _resourceService.IntrospectTokenAsync(token, cancellationToken);
             var parsedScopes = ParseDelimitedValues(introspection.Scope);
             var parsedRoles = ParseRoles(introspection.Role, introspection.Roles);
-            var parsedAudiences = ParseDelimitedValues(introspection.Aud);
+            var parsedAudiences = ParseAudiences(introspection.Aud);
 
             return Ok(new
             {
@@ -252,6 +250,20 @@ public class TokenInfoController : ControllerBase
         }
 
         return parsedRoles.OrderBy(role => role, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static IReadOnlyList<string> ParseAudiences(IEnumerable<string>? audiences)
+    {
+        if (audiences == null)
+        {
+            return [];
+        }
+
+        return audiences
+            .Where(audience => !string.IsNullOrWhiteSpace(audience))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(audience => audience, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static IReadOnlyList<string> ParseDelimitedValues(string? value)

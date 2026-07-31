@@ -95,6 +95,47 @@ public class GuardhouseOpaqueTokenValidatorTests
             .Should().BeEquivalentTo("resource-api", "guardhouse-api");
     }
 
+    [Fact]
+    public async Task ValidateTokenAsync_WithDelimitedAudienceValue_ShouldRequireExactMatch()
+    {
+        var introspectionService = new Mock<IGuardhouseIntrospectionService>();
+        introspectionService
+            .Setup(x => x.IntrospectTokenAsync("invalid_audience_token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IntrospectionResponse
+            {
+                Active = true,
+                Sub = "user",
+                Aud = new[] { "resource-api,guardhouse-api" }
+            });
+
+        var services = new ServiceCollection();
+        services.AddSingleton(introspectionService.Object);
+        using var provider = services.BuildServiceProvider();
+
+        var validator = new GuardhouseOpaqueTokenValidator(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new GuardhouseResourceOptions
+            {
+                Authority = "https://auth.example.com",
+                Audience = "guardhouse-api",
+                ValidationMode = TokenValidationMode.Introspection
+            }),
+            new RecordingLogger<GuardhouseOpaqueTokenValidator>());
+
+        var result = await validator.ValidateTokenAsync(
+            "invalid_audience_token",
+            new TokenValidationParameters
+            {
+                ValidateIssuer = false,
+                ValidateAudience = true,
+                ValidAudience = "guardhouse-api",
+                ValidateLifetime = false
+            });
+
+        result.IsValid.Should().BeFalse();
+        result.ClaimsIdentity.Should().BeNull();
+    }
+
     private sealed class RecordingLogger<T> : ILogger<T>
     {
         public List<RecordedMessage> Messages { get; } = [];

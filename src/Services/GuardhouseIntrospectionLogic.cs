@@ -291,13 +291,6 @@ internal static class GuardhouseIntrospectionLogic
         return audiences;
     }
 
-    private static IEnumerable<string> SplitAudiences(string audiences)
-    {
-        return audiences.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
-            .Select(audience => audience.Trim())
-            .Where(audience => !string.IsNullOrWhiteSpace(audience));
-    }
-
     private static IEnumerable<string> EnumerateAudiences(IEnumerable<string>? audiences)
     {
         if (audiences == null)
@@ -312,10 +305,7 @@ internal static class GuardhouseIntrospectionLogic
                 continue;
             }
 
-            foreach (var tokenAudience in SplitAudiences(audience))
-            {
-                yield return tokenAudience;
-            }
+            yield return audience;
         }
     }
 
