@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-08-11
+
+### Fixed
+- Fixed the three-argument `AddGuardhouseClient(...)` registration so its defaults no longer enable refresh without `offline_access`
+- Defaulted combined System API registration helpers to the required `system_api` scope while preserving `api` for the generic client
+- Consolidated token retries into one transient-only policy that honors `EnableHttpResilience` and disposes retry responses correctly
+- Prevented automatic retries for System API `POST`, `PUT`, `PATCH`, and `DELETE` requests to avoid replaying committed mutations
+
 ## [1.0.5] - 2026-07-30
 
 ### Added

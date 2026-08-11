@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using FluentAssertions;
@@ -186,52 +187,79 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task RequestTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
-        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+        var requestCount = 0;
+        var response = new TrackingHttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("{\"error\":\"invalid_client\",\"error_description\":\"client_secret=super-secret\"}")
+        };
+        var tokenService = CreateTokenService();
 
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.BadRequest,
-                Content = new StringContent("{\"error\":\"invalid_client\",\"error_description\":\"client_secret=super-secret\"}")
-            });
+            .Callback<HttpRequestMessage, CancellationToken>((_, _) => Interlocked.Increment(ref requestCount))
+            .ReturnsAsync(response);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => tokenService.RequestTokenAsync());
         exception.Message.Should().Contain("invalid_client");
         exception.Message.Should().NotContain("error_description");
         exception.Message.Should().NotContain("super-secret");
+        requestCount.Should().Be(1);
+        response.IsDisposed.Should().BeTrue();
     }
 
     [Fact]
-    public async Task RequestTokenAsync_ShouldRetryOnFailure()
+    public async Task RequestTokenAsync_WhenDirectlyConstructed_ShouldRetryWithFreshRequestsAndDisposeResponses()
     {
-        var attemptCount = 0;
+        var requests = new List<HttpRequestMessage>();
+        var contents = new List<HttpContent?>();
+        var responses = new List<TrackingHttpResponseMessage>();
+        var requestCount = 0;
+
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                contents.Add(request.Content);
+            })
             .ReturnsAsync(() =>
             {
-                attemptCount++;
-                if (attemptCount < 4)
-                {
-                    return new HttpResponseMessage
+                var response = Interlocked.Increment(ref requestCount) == 1
+                    ? new TrackingHttpResponseMessage(HttpStatusCode.TooManyRequests)
                     {
-                        StatusCode = HttpStatusCode.TooManyRequests
+                        Content = new StringContent("{\"error\":\"temporarily_unavailable\"}")
+                    }
+                    : new TrackingHttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(JsonSerializer.Serialize(new TokenResponse
+                        {
+                            AccessToken = "retried-access-token",
+                            TokenType = "Bearer",
+                            ExpiresIn = 3600
+                        }))
                     };
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMilliseconds(1));
                 }
 
-                return new HttpResponseMessage
-                {
-                    StatusCode = HttpStatusCode.OK,
-                    Content = new StringContent(JsonSerializer.Serialize(new TokenResponse()))
-                };
+                responses.Add(response);
+                return response;
             });
 
         var tokenService = CreateTokenService();
-        await tokenService.RequestTokenAsync();
+        var token = await tokenService.RequestTokenAsync();
 
-        attemptCount.Should().Be(4);
+        token.AccessToken.Should().Be("retried-access-token");
+        requestCount.Should().Be(2);
+        requests.Should().HaveCount(2);
+        requests[0].Should().NotBeSameAs(requests[1]);
+        contents.Should().HaveCount(2).And.NotContainNulls();
+        contents[0].Should().NotBeSameAs(contents[1]);
+        responses.Should().OnlyContain(response => response.IsDisposed);
     }
 
     #endregion
@@ -258,7 +286,7 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task RefreshTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
-        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+        var tokenService = CreateTokenService();
 
         _mockHttpMessageHandler
             .Protected()
@@ -503,7 +531,7 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task IntrospectTokenAsync_WhenResponseIsError_ShouldThrowException()
     {
-        var tokenService = CreateTokenService(CreateNonRetryingOptions());
+        var tokenService = CreateTokenService();
 
         _mockHttpMessageHandler
             .Protected()
@@ -615,6 +643,8 @@ public class GuardhouseTokenServiceTests
     [Fact]
     public async Task IsTokenActiveAsync_WhenIntrospectionFails_ShouldThrow()
     {
+        _options.Value.EnableHttpResilience = false;
+
         _mockHttpMessageHandler
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
@@ -703,21 +733,20 @@ public class GuardhouseTokenServiceTests
             });
     }
 
-    private static IOptions<GuardhouseClientOptions> CreateNonRetryingOptions()
+    private sealed class TrackingHttpResponseMessage(HttpStatusCode statusCode)
+        : HttpResponseMessage(statusCode)
     {
-        return Options.Create(new GuardhouseClientOptions
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
         {
-            Authority = "https://test-guardhouse.com",
-            ClientId = "test-client",
-            ClientSecret = "test-secret",
-            Scope = "api",
-            EnableTokenCaching = true,
-            CacheExpirationBufferSeconds = 60,
-            EnableTokenRefresh = true,
-            EnableHttpResilience = false,
-            RequestTimeoutSeconds = 30,
-            MaxRetryAttempts = 3
-        });
+            if (disposing)
+            {
+                IsDisposed = true;
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     #endregion

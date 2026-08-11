@@ -41,7 +41,7 @@ dotnet add package Guardhouse.SDK
 - RFC 7662 token introspection for resource-server validation and client-side inspection
 - Typed external system API clients for users, roles, and permissions
 - HMAC-SHA256 webhook signature validation with timestamp replay protection
-- Retry and timeout policies for outbound HTTP calls
+- Retry and timeout policies for transient token failures and safe system API reads
 
 ## Quick Start
 
@@ -289,7 +289,7 @@ Detailed system API usage and endpoint mapping are documented in the [System API
 - Webhook validation uses the raw request body, a five-minute timestamp tolerance, a 5 MB default body limit, and fixed-time HMAC comparison
 - JWKS refresh is lazy and triggered when unknown signing keys are encountered
 - Introspection mode does not silently fall back to signature validation
-- HTTP calls use retry and timeout policies to handle transient failures
+- Token calls and safe system API reads retry transient failures; POST, PUT, PATCH, and DELETE system API calls are never retried automatically
 - Error messages sanitize server responses instead of returning raw bodies
 
 ## System API Coverage

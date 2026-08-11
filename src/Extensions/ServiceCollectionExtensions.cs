@@ -21,6 +21,9 @@ using Polly.Timeout;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    private static readonly IAsyncPolicy<HttpResponseMessage> NoRetryPolicy =
+        Policy.NoOpAsync<HttpResponseMessage>();
+
     /// <summary>
     /// Adds Guardhouse client services to dependency injection container.
     /// This enables your application to obtain access tokens from identity server.
@@ -55,7 +58,6 @@ public static class ServiceCollectionExtensions
                 {
                     client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
                 })
-                .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().RetryPolicy)
                 .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().TimeoutPolicy);
 
             services.TryAddSingleton<GuardhouseClientRegistrationsMarker>();
@@ -182,6 +184,7 @@ public static class ServiceCollectionExtensions
             options.ClientId = clientId;
             options.ClientSecret = clientSecret;
             options.Scope = scope;
+            options.EnableTokenRefresh = HasScope(scope, GuardhouseConstants.Scopes.OfflineAccess);
         });
     }
 
@@ -375,7 +378,7 @@ public static class ServiceCollectionExtensions
     /// <param name="authority">The authority URL of identity server.</param>
     /// <param name="clientId">The client ID assigned to your application.</param>
     /// <param name="clientSecret">The client secret for your application.</param>
-    /// <param name="scope">The scope(s) to request (default: "api").</param>
+    /// <param name="scope">The scope(s) to request (default: "system_api").</param>
     /// <param name="apiBaseUrl">Optional base URL for the Guardhouse API. If omitted, falls back to Authority.</param>
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseClientWithApiClients(
@@ -383,7 +386,7 @@ public static class ServiceCollectionExtensions
         string authority,
         string clientId,
         string clientSecret,
-        string scope = GuardhouseConstants.Defaults.DefaultScope,
+        string scope = AuthorizationConsts.Scopes.SystemApi,
         string? apiBaseUrl = null)
     {
         return services.AddGuardhouseClientWithApiClients(
@@ -412,7 +415,7 @@ public static class ServiceCollectionExtensions
     /// <param name="authority">The authority URL of identity server.</param>
     /// <param name="clientId">The client ID assigned to your application.</param>
     /// <param name="clientSecret">The client secret for your application.</param>
-    /// <param name="scope">The scope(s) to request (default: "api").</param>
+    /// <param name="scope">The scope(s) to request (default: "system_api").</param>
     /// <param name="apiBaseUrl">Optional base URL for the Guardhouse API. If omitted, falls back to Authority.</param>
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseClientWithUserService(
@@ -420,7 +423,7 @@ public static class ServiceCollectionExtensions
         string authority,
         string clientId,
         string clientSecret,
-        string scope = GuardhouseConstants.Defaults.DefaultScope,
+        string scope = AuthorizationConsts.Scopes.SystemApi,
         string? apiBaseUrl = null)
     {
         return services.AddGuardhouseClientWithApiClients(authority, clientId, clientSecret, scope, apiBaseUrl);
@@ -435,7 +438,7 @@ public static class ServiceCollectionExtensions
     /// <param name="authority">The authority URL of identity server.</param>
     /// <param name="clientId">The client ID assigned to your application.</param>
     /// <param name="clientSecret">The client secret for your application.</param>
-    /// <param name="scope">The scope(s) to request (default: "api").</param>
+    /// <param name="scope">The scope(s) to request (default: "system_api").</param>
     /// <param name="apiBaseUrl">Optional base URL for the Guardhouse API. If omitted, falls back to Authority.</param>
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddGuardhouseClientWithUserClients(
@@ -443,7 +446,7 @@ public static class ServiceCollectionExtensions
         string authority,
         string clientId,
         string clientSecret,
-        string scope = GuardhouseConstants.Defaults.DefaultScope,
+        string scope = AuthorizationConsts.Scopes.SystemApi,
         string? apiBaseUrl = null)
     {
         return services.AddGuardhouseClientWithApiClients(authority, clientId, clientSecret, scope, apiBaseUrl);
@@ -452,7 +455,7 @@ public static class ServiceCollectionExtensions
     private sealed class GuardhouseClientPolicyCache(IOptions<GuardhouseClientOptions> options)
     {
         public IAsyncPolicy<HttpResponseMessage> RetryPolicy { get; } =
-            BuildRetryPolicy(options.Value.MaxRetryAttempts);
+            BuildRetryPolicy(options.Value.MaxRetryAttempts, options.Value.EnableHttpResilience);
 
         public IAsyncPolicy<HttpResponseMessage> TimeoutPolicy { get; } =
             BuildTimeoutPolicy(options.Value.RequestTimeoutSeconds);
@@ -473,11 +476,11 @@ public static class ServiceCollectionExtensions
 
     private sealed class GuardhouseApiClientRegistrationsMarker;
 
-    private static IAsyncPolicy<HttpResponseMessage> BuildRetryPolicy(int maxRetryAttempts)
+    internal static IAsyncPolicy<HttpResponseMessage> BuildRetryPolicy(int maxRetryAttempts, bool enabled = true)
     {
-        if (maxRetryAttempts <= 0)
+        if (!enabled || maxRetryAttempts <= 0)
         {
-            return Policy.NoOpAsync<HttpResponseMessage>();
+            return NoRetryPolicy;
         }
 
         // Handle network exceptions, server 5xx errors (500-599), timeouts, 429 rate limits, and 408 timeout
@@ -494,7 +497,11 @@ public static class ServiceCollectionExtensions
                 maxRetryAttempts,
                 (retryAttempt, result, _) =>
                     GetRetryDelay(result, retryAttempt),
-                (_, _, _, _) => Task.CompletedTask);
+                (result, _, _, _) =>
+                {
+                    result.Result?.Dispose();
+                    return Task.CompletedTask;
+                });
     }
 
     private static bool IsOfflineAccessScopeValid(GuardhouseClientOptions options)
@@ -571,6 +578,13 @@ public static class ServiceCollectionExtensions
         return null;
     }
 
+    private static bool IsSafeRetryMethod(HttpMethod method)
+    {
+        return method == HttpMethod.Get ||
+               method == HttpMethod.Head ||
+               method == HttpMethod.Options;
+    }
+
     private static IAsyncPolicy<HttpResponseMessage> BuildTimeoutPolicy(int requestTimeoutSeconds)
     {
         return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(requestTimeoutSeconds));
@@ -589,7 +603,10 @@ public static class ServiceCollectionExtensions
             {
                 client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             })
-            .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().RetryPolicy)
+            .AddPolicyHandler((sp, request) =>
+                IsSafeRetryMethod(request.Method)
+                    ? sp.GetRequiredService<GuardhouseClientPolicyCache>().RetryPolicy
+                    : NoRetryPolicy)
             .AddPolicyHandler((sp, _) => sp.GetRequiredService<GuardhouseClientPolicyCache>().TimeoutPolicy);
     }
 }

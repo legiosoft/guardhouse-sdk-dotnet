@@ -46,8 +46,7 @@ public class ServiceCollectionExtensionsTests
         services.AddGuardhouseClient(
             authority: "https://test.com",
             clientId: "test-client",
-            clientSecret: "test-secret",
-            scope: "api offline_access");
+            clientSecret: "test-secret");
 
         var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
@@ -55,7 +54,25 @@ public class ServiceCollectionExtensionsTests
         options.Authority.Should().Be("https://test.com");
         options.ClientId.Should().Be("test-client");
         options.ClientSecret.Should().Be("test-secret");
+        options.Scope.Should().Be(GuardhouseConstants.Defaults.DefaultScope);
+        options.EnableTokenRefresh.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AddGuardhouseClient_WithOfflineAccessScope_ShouldKeepRefreshEnabled()
+    {
+        var services = new ServiceCollection();
+        services.AddGuardhouseClient(
+            authority: "https://test.com",
+            clientId: "test-client",
+            clientSecret: "test-secret",
+            scope: "api offline_access");
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+
         options.Scope.Should().Be("api offline_access");
+        options.EnableTokenRefresh.Should().BeTrue();
     }
 
     [Fact]
@@ -325,6 +342,45 @@ public class ServiceCollectionExtensionsTests
             .WithMessage("*ApiBaseUrl must be an absolute URI*");
     }
 
+    [Theory]
+    [InlineData("api-clients")]
+    [InlineData("user-service")]
+    [InlineData("user-clients")]
+    public void CombinedApiClientHelpers_ShouldDefaultToSystemApiScope(string helper)
+    {
+        var services = new ServiceCollection();
+
+        switch (helper)
+        {
+            case "api-clients":
+                services.AddGuardhouseClientWithApiClients(
+                    "https://test.com",
+                    "test-client",
+                    "test-secret");
+                break;
+            case "user-service":
+                services.AddGuardhouseClientWithUserService(
+                    "https://test.com",
+                    "test-client",
+                    "test-secret");
+                break;
+            case "user-clients":
+                services.AddGuardhouseClientWithUserClients(
+                    "https://test.com",
+                    "test-client",
+                    "test-secret");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(helper));
+        }
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<GuardhouseClientOptions>>().Value;
+
+        options.Scope.Should().Be(AuthorizationConsts.Scopes.SystemApi);
+        options.EnableTokenRefresh.Should().BeFalse();
+    }
+
     [Fact]
     public void AddGuardhouseClientWithUserService_ShouldRegisterClientAndUserServices()
     {
@@ -334,7 +390,7 @@ public class ServiceCollectionExtensionsTests
             authority: "https://test.com",
             clientId: "test-client",
             clientSecret: "test-secret",
-            scope: "api",
+            scope: AuthorizationConsts.Scopes.SystemApi,
             apiBaseUrl: "https://api.test.com");
 
         services.Should().Contain(sd => sd.ServiceType == typeof(IGuardhouseTokenService));

@@ -30,23 +30,9 @@ public class GuardhouseTokenService(
 {
     private readonly IClock _clock = clock ?? SystemClock.Instance;
 
-    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = options.Value.EnableHttpResilience
-        ? Policy<HttpResponseMessage>
-            .Handle<HttpRequestException>()
-            .OrResult(msg => !msg.IsSuccessStatusCode)
-            .WaitAndRetryAsync(
-                options.Value.MaxRetryAttempts,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt - 1)),
-                onRetry: (outcome, timespan, retryAttempt, _) =>
-                {
-                    logger.LogWarning(
-                        "Request failed with {StatusCode}. Retrying in {Delay}s (attempt {Attempt}/{MaxAttempts})",
-                        outcome.Result?.StatusCode,
-                        timespan.TotalSeconds,
-                        retryAttempt,
-                        options.Value.MaxRetryAttempts);
-                })
-        : Policy.NoOpAsync<HttpResponseMessage>();
+    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy =
+        ServiceCollectionExtensions.BuildRetryPolicy(
+            options.Value.MaxRetryAttempts, options.Value.EnableHttpResilience);
 
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> TokenLocks = new(StringComparer.Ordinal);
 
@@ -138,7 +124,7 @@ public class GuardhouseTokenService(
         try
         {
             response = await _retryPolicy.ExecuteAsync(
-                async (ct) =>
+                async ct =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
                     var scope = GetRequestedScope(options1);
@@ -161,6 +147,8 @@ public class GuardhouseTokenService(
                 $"Authority: {options1.Authority}, ClientId: {options1.ClientId}. " +
                 $"Error: {ex.Message}", ex);
         }
+
+        using var responseToDispose = response;
 
         if (!response.IsSuccessStatusCode)
         {
@@ -244,7 +232,7 @@ public class GuardhouseTokenService(
         try
         {
             response = await _retryPolicy.ExecuteAsync(
-                async (ct) =>
+                async ct =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
                     request.Content = new FormUrlEncodedContent([
@@ -264,6 +252,8 @@ public class GuardhouseTokenService(
                 $"Failed to send token refresh request to {tokenEndpoint}. " +
                 $"Error: {ex.Message}", ex);
         }
+
+        using var responseToDispose = response;
 
         if (!response.IsSuccessStatusCode)
         {
@@ -309,17 +299,16 @@ public class GuardhouseTokenService(
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options1.RequestTimeoutSeconds));
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
+        var clientId = options1.IntrospectionClientId ?? options1.ClientId;
+        var clientSecret = options1.IntrospectionClientSecret ?? options1.ClientSecret;
+
         HttpResponseMessage response;
         try
         {
             response = await _retryPolicy.ExecuteAsync(
-                async (ct) =>
+                async ct =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, introspectionEndpoint);
-
-                    var clientId = options1.IntrospectionClientId ?? options1.ClientId;
-                    var clientSecret = options1.IntrospectionClientSecret ?? options1.ClientSecret;
-
                     var formData = new List<KeyValuePair<string, string>>
                     {
                         new("token", token)
@@ -328,7 +317,8 @@ public class GuardhouseTokenService(
                     if (options1.IntrospectionCredentialTransmission == IntrospectionCredentialTransmission.BasicAuth)
                     {
                         var credentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
-                        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
                     }
                     else
                     {
@@ -350,6 +340,8 @@ public class GuardhouseTokenService(
                 $"Verify your Guardhouse instance is accessible and credentials are correct. " +
                 $"For introspection, you may need to configure IntrospectionClientId and IntrospectionClientSecret in your GuardhouseClientOptions.", ex);
         }
+
+        using var responseToDispose = response;
 
         if (!response.IsSuccessStatusCode)
         {
