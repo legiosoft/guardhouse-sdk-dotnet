@@ -92,11 +92,8 @@ $env:NUGET_API_KEY = 'YOUR_NUGET_API_KEY'
 
 Push the package and matching symbols package:
 
-```powershell
-dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.6.nupkg `
-  --source https://api.nuget.org/v3/index.json `
-  --api-key $env:NUGET_API_KEY `
-  --skip-duplicate
+```text
+dotnet nuget push .\artifacts\Guardhouse.SDK.1.0.7.nupkg --source https://api.nuget.org/v3/index.json --api-key NUGET_API_KEY --skip-duplicate
 ```
 
 The .NET CLI also pushes the matching `.snupkg` from the same directory unless `--no-symbols` is specified.
