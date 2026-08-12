@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.6</Version>
+        <Version>1.0.7</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,14 +21,11 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.6 - fix client registration defaults and harden outbound HTTP resilience.
+            1.0.7 - add user activation webhook contract support.
 
             Changes:
-            - Make the three-argument client registration start successfully with its default scope
-            - Default combined System API client helpers to the required system_api scope
-            - Consolidate token retries into one transient-only policy that honors EnableHttpResilience
-            - Prevent automatic retries of System API mutation requests
-            - Dispose intermediate and terminal token responses correctly
+            - Add WebhookEventType.UserActivated for invitation acceptance/user activation events
+            - Add UserActivatedWebhookPayload for typed webhook envelope deserialization
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 
