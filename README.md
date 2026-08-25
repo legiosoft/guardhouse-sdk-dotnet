@@ -123,6 +123,10 @@ app.MapGet("/users/{id:int}", async (int id, IGuardhouseUsersClient usersClient)
 app.Run();
 ```
 
+User responses expose lifecycle status separately from access flags. `UserStatus`
+contains only `Staged`, `Invited`, `Active`, and `Archived`; use `IsSuspended`
+and `IsLocked` to detect disabled or locked access state.
+
 For the full endpoint-to-client mapping, see the [System API Guide](https://github.com/legiosoft/guardhouse-sdk-dotnet/blob/main/docs/SYSTEM_API.md).
 
 ### Resource Server

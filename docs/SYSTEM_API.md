@@ -131,6 +131,21 @@ var users = await usersClient.GetUsersAsync(new GetUsersRequest
 var user = await usersClient.GetUserByEmailAsync("ada@example.com");
 ```
 
+### User status and access flags
+
+`UserStatus` represents only the Guardhouse lifecycle status:
+
+- `Staged`
+- `Invited`
+- `Active`
+- `Archived`
+
+Suspended or locked access is represented by separate response flags, not by
+`UserStatus` values:
+
+- `IsSuspended`
+- `IsLocked`
+
 ### Change password
 
 ```csharp
