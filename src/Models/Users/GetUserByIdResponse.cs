@@ -20,6 +20,12 @@ public record GetUserByIdResponse
     [JsonPropertyName("status")]
     public UserStatus Status { get; init; }
 
+    [JsonPropertyName("isSuspended")]
+    public bool IsSuspended { get; init; }
+
+    [JsonPropertyName("isLocked")]
+    public bool IsLocked { get; init; }
+
     [JsonPropertyName("avatarUrl")]
     public string? AvatarUrl { get; init; }
 

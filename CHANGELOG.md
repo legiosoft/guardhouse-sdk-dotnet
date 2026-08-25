@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-08-25
+
+### Changed
+- **BREAKING:** Aligned `UserStatus` with the Guardhouse API lifecycle contract: `Staged = 1`, `Invited = 2`, `Active = 3`, `Archived = 4`
+- **BREAKING:** Removed SDK-only `UserStatus.Inactive`, `UserStatus.Locked`, and `UserStatus.Suspended`; access state must be read from `IsSuspended` and `IsLocked`
+- Updated user status deserialization to map numeric Guardhouse API values explicitly instead of casting through the SDK enum
+
+### Added
+- Added `IsSuspended` and `IsLocked` to `GetUserByIdResponse`, matching the existing list and email user response models
+
+### Fixed
+- Fixed invited users returned as `status: 2` being deserialized as `Inactive`
+- Fixed active users returned as `status: 3` being deserialized as `Locked`
+- Fixed archived users returned as `status: 4` being deserialized as `Invited`
+
 ## [1.0.7] - 2026-08-12
 
 ### Added

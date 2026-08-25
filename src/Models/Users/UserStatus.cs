@@ -6,11 +6,8 @@ using System.Text.Json.Serialization;
 public enum UserStatus
 {
     Unknown = -1,
-    Staged = 0,
-    Active = 1,
-    Inactive = 2,
-    Locked = 3,
-    Invited = 4,
-    Suspended = 5,
-    Archived = 6
+    Staged = 1,
+    Invited = 2,
+    Active = 3,
+    Archived = 4
 }

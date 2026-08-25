@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.7</Version>
+        <Version>1.0.8</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,11 +21,13 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.7 - add user activation webhook contract support.
+            1.0.8 - align user status model with the Guardhouse API lifecycle contract.
 
             Changes:
-            - Add WebhookEventType.UserActivated for invitation acceptance/user activation events
-            - Add UserActivatedWebhookPayload for typed webhook envelope deserialization
+            - BREAKING: UserStatus now contains only Guardhouse lifecycle statuses: Staged, Invited, Active, Archived
+            - BREAKING: Removed SDK-only Inactive, Locked, and Suspended user status values
+            - Fixed numeric status deserialization so server status 2 maps to Invited, 3 maps to Active, and 4 maps to Archived
+            - Added IsSuspended and IsLocked to GetUserByIdResponse so access flags are represented separately from lifecycle status
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

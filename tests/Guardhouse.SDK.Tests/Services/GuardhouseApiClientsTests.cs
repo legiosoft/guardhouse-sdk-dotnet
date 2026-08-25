@@ -147,6 +147,9 @@ public class GuardhouseApiClientsTests
         response.Total.Should().Be(1);
         response.Users.Should().HaveCount(1);
         response.Users[0].LastLogin.Should().Be(Instant.FromUtc(2026, 4, 22, 10, 15, 30));
+        response.Users[0].Status.Should().Be(UserStatus.Active);
+        response.Users[0].IsSuspended.Should().BeFalse();
+        response.Users[0].IsLocked.Should().BeFalse();
 
         sentRequest.Should().NotBeNull();
         sentRequest!.Method.Should().Be(HttpMethod.Get);
@@ -304,7 +307,7 @@ public class GuardhouseApiClientsTests
     }
 
     [Fact]
-    public async Task GetUserByIdAsync_WithUnknownStatus_ShouldFallbackToUnknown()
+    public async Task GetUserByIdAsync_ShouldDeserializeStatusAndAccessFlagsSeparately()
     {
         const string json = """
                             {
@@ -313,7 +316,9 @@ public class GuardhouseApiClientsTests
                               "firstName": "John",
                               "lastName": "Doe",
                               "lastLogin": "2026-04-22T10:15:30Z",
-                              "status": "retired",
+                              "status": 2,
+                              "isSuspended": true,
+                              "isLocked": true,
                               "roles": [],
                               "systemPermissions": []
                             }
@@ -332,7 +337,9 @@ public class GuardhouseApiClientsTests
         var response = await client.GetUserByIdAsync(7);
 
         response.Should().NotBeNull();
-        response!.Status.Should().Be(UserStatus.Unknown);
+        response!.Status.Should().Be(UserStatus.Invited);
+        response.IsSuspended.Should().BeTrue();
+        response.IsLocked.Should().BeTrue();
         response.LastLogin.Should().Be(Instant.FromUtc(2026, 4, 22, 10, 15, 30));
     }
 

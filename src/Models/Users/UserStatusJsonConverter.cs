@@ -10,9 +10,10 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
     {
         if (reader.TokenType == JsonTokenType.Number)
         {
-            if (reader.TryGetInt32(out var numericValue) && Enum.IsDefined(typeof(UserStatus), numericValue))
+            if (reader.TryGetInt32(out var numericValue) &&
+                TryMapNumericStatus(numericValue, out var status))
             {
-                return (UserStatus)numericValue;
+                return status;
             }
 
             return UserStatus.Unknown;
@@ -26,9 +27,10 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
                 return UserStatus.Unknown;
             }
 
-            if (int.TryParse(value, out var numericValue) && Enum.IsDefined(typeof(UserStatus), numericValue))
+            if (int.TryParse(value, out var numericValue) &&
+                TryMapNumericStatus(numericValue, out var status))
             {
-                return (UserStatus)numericValue;
+                return status;
             }
 
             if (TryMapStringStatus(value, out var mappedStatus))
@@ -54,12 +56,21 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
             UserStatus.Staged => "staged",
             UserStatus.Invited => "invited",
             UserStatus.Active => "active",
-            UserStatus.Inactive => "inactive",
-            UserStatus.Locked => "locked",
-            UserStatus.Suspended => "suspended",
             UserStatus.Archived => "archived",
             _ => "unknown"
         });
+    }
+
+    private static bool TryMapNumericStatus(int value, out UserStatus status)
+    {
+        if (Enum.IsDefined(typeof(UserStatus), value))
+        {
+            status = (UserStatus)value;
+            return true;
+        }
+
+        status = UserStatus.Unknown;
+        return false;
     }
 
     private static bool TryMapStringStatus(string value, out UserStatus status)
@@ -90,26 +101,6 @@ public sealed class UserStatusJsonConverter : JsonConverter<UserStatus>
         if (string.Equals(normalizedValue, "active", StringComparison.OrdinalIgnoreCase))
         {
             status = UserStatus.Active;
-            return true;
-        }
-
-        if (string.Equals(normalizedValue, "inactive", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalizedValue, "disabled", StringComparison.OrdinalIgnoreCase))
-        {
-            status = UserStatus.Inactive;
-            return true;
-        }
-
-        if (string.Equals(normalizedValue, "locked", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalizedValue, "lockedout", StringComparison.OrdinalIgnoreCase))
-        {
-            status = UserStatus.Locked;
-            return true;
-        }
-
-        if (string.Equals(normalizedValue, "suspended", StringComparison.OrdinalIgnoreCase))
-        {
-            status = UserStatus.Suspended;
             return true;
         }
 
