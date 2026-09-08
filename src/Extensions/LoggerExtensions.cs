@@ -41,7 +41,7 @@ internal static class LoggerExtensions
 
     private static object? SanitizeLogArgument(object? value)
     {
-        return value is string text ? SanitizeForLog(text) : value;
+        return value is string ? "[REDACTED]" : value;
     }
 
     private static string SanitizeForLog(string value)
