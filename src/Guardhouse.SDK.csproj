@@ -8,7 +8,7 @@
         <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
         <PackageId>Guardhouse.SDK</PackageId>
-        <Version>1.0.8</Version>
+        <Version>1.0.9</Version>
         <Authors>LEGIOSOFT SOLUTIONS S.L.</Authors>
         <Company>LEGIOSOFT SOLUTIONS S.L.</Company>
         <Product>Guardhouse SDK for .NET</Product>
@@ -21,13 +21,12 @@
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageReleaseNotes>
-            1.0.8 - align user status model with the Guardhouse API lifecycle contract.
+            1.0.9 - support named resource authentication schemes.
 
             Changes:
-            - BREAKING: UserStatus now contains only Guardhouse lifecycle statuses: Staged, Invited, Active, Archived
-            - BREAKING: Removed SDK-only Inactive, Locked, and Suspended user status values
-            - Fixed numeric status deserialization so server status 2 maps to Invited, 3 maps to Active, and 4 maps to Archived
-            - Added IsSuspended and IsLocked to GetUserByIdResponse so access flags are represented separately from lifecycle status
+            - Add a named AddGuardhouseResource overload for independent resource settings
+            - Preserve the selected resource scheme during opaque-token validation
+            - Isolate introspection cache entries for named resources
         </PackageReleaseNotes>
         <PackageTags>openid;oauth2;openid-connect;authentication;authorization;jwt;identityserver;guardhouse;idaas;security;resource-server;client-credentials;token-validation;jwks;introspection;polly;system-api;users;roles;permissions</PackageTags>
 

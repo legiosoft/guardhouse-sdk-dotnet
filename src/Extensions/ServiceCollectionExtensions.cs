@@ -9,8 +9,10 @@ using Constants;
 using Models;
 using Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Polly;
@@ -141,6 +143,43 @@ public static class ServiceCollectionExtensions
             services.TryAddSingleton<GuardhouseResourceRegistrationsMarker>();
         }
 
+        return services;
+    }
+
+    /// <summary>
+    /// Adds a named Guardhouse resource authentication scheme with independent options.
+    /// </summary>
+    public static IServiceCollection AddGuardhouseResource(
+        this IServiceCollection services,
+        string scheme,
+        Action<GuardhouseResourceOptions> configureAction)
+    {
+        ArgumentNullException.ThrowIfNull(configureAction);
+        if (string.IsNullOrWhiteSpace(scheme))
+        {
+            throw new ArgumentException("Authentication scheme is required.", nameof(scheme));
+        }
+
+        services.AddOptions<GuardhouseResourceOptions>(scheme)
+            .Configure(configureAction)
+            .PostConfigure(options => options.PolicyName = scheme)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddMemoryCache();
+        services.AddHttpClient(scheme, client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            .AddPolicyHandler((sp, _) => BuildRetryPolicy(
+                sp.GetRequiredService<IOptionsMonitor<GuardhouseResourceOptions>>().Get(scheme).MaxRetryAttempts));
+        services.AddAuthentication().AddJwtBearer(scheme, _ => { });
+        services.AddOptions<JwtBearerOptions>(scheme)
+            .Configure<IOptionsMonitor<GuardhouseResourceOptions>, IServiceScopeFactory, ILoggerFactory, IHttpClientFactory, IMemoryCache>(
+                (options, resources, scopes, logs, http, cache) =>
+                {
+                    var resource = Options.Create(resources.Get(scheme));
+                    var introspection = new GuardhouseIntrospectionService(
+                        http.CreateClient(scheme), cache, resource, logs.CreateLogger<GuardhouseIntrospectionService>());
+                    new ConfigureGuardhouseJwtOptions(resource, scopes, logs, introspection).Configure(scheme, options);
+                });
         return services;
     }
 

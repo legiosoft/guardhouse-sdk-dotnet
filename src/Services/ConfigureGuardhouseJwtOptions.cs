@@ -20,7 +20,14 @@ internal class ConfigureGuardhouseJwtOptions(
     ILoggerFactory loggerFactory)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
-    private const string GuardhouseSchemeName = GuardhouseConstants.Authentication.DefaultScheme;
+    private readonly IGuardhouseIntrospectionService? introspectionService;
+
+    internal ConfigureGuardhouseJwtOptions(IOptions<GuardhouseResourceOptions> resourceOptions,
+        IServiceScopeFactory serviceScopeFactory, ILoggerFactory loggerFactory, IGuardhouseIntrospectionService introspectionService)
+        : this(resourceOptions, serviceScopeFactory, loggerFactory)
+    {
+        this.introspectionService = introspectionService;
+    }
 
     private readonly ILogger _logger = loggerFactory.CreateLogger<ConfigureGuardhouseJwtOptions>();
 
@@ -31,7 +38,7 @@ internal class ConfigureGuardhouseJwtOptions(
 
     public void Configure(string? name, JwtBearerOptions options)
     {
-        if (name != GuardhouseSchemeName)
+        if (name != resourceOptions.Value.PolicyName)
         {
             return;
         }
@@ -77,12 +84,20 @@ internal class ConfigureGuardhouseJwtOptions(
         {
             WarnIfIntrospectionClientIdDiffersFromAudience(opts);
 
-            options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
+            if (introspectionService is null)
+            {
+                options.EventsType = typeof(GuardhouseIntrospectionJwtBearerEvents);
+            }
+            else
+            {
+                options.Events = new GuardhouseIntrospectionJwtBearerEvents(
+                    resourceOptions, introspectionService, loggerFactory.CreateLogger<GuardhouseIntrospectionJwtBearerEvents>());
+            }
 
             var opaqueTokenValidator = new GuardhouseOpaqueTokenValidator(
                 serviceScopeFactory,
                 resourceOptions,
-                loggerFactory.CreateLogger<GuardhouseOpaqueTokenValidator>());
+                loggerFactory.CreateLogger<GuardhouseOpaqueTokenValidator>(), introspectionService);
 
 #if NET8_0_OR_GREATER
             options.UseSecurityTokenValidators = false;
@@ -418,11 +433,13 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptions<GuardhouseResourceOptions> _resourceOptions;
     private readonly ILogger<GuardhouseOpaqueTokenValidator> _logger;
+    private readonly IGuardhouseIntrospectionService? _introspectionService;
 
     public GuardhouseOpaqueTokenValidator(
         IServiceScopeFactory scopeFactory,
         IOptions<GuardhouseResourceOptions> resourceOptions,
-        ILogger<GuardhouseOpaqueTokenValidator> logger)
+        ILogger<GuardhouseOpaqueTokenValidator> logger,
+        IGuardhouseIntrospectionService? introspectionService = null)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
         ArgumentNullException.ThrowIfNull(resourceOptions);
@@ -431,6 +448,7 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
         _scopeFactory = scopeFactory;
         _resourceOptions = resourceOptions;
         _logger = logger;
+        _introspectionService = introspectionService;
     }
 
     public override bool CanValidateToken => true;
@@ -498,7 +516,7 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var introspectionService = scope.ServiceProvider.GetRequiredService<IGuardhouseIntrospectionService>();
+            var introspectionService = _introspectionService ?? scope.ServiceProvider.GetRequiredService<IGuardhouseIntrospectionService>();
             introspectionResult = await introspectionService.IntrospectTokenAsync(token).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -512,7 +530,7 @@ internal sealed class GuardhouseOpaqueTokenValidator : SecurityTokenHandler
             introspectionResult,
             validationParameters,
             _resourceOptions.Value,
-            GuardhouseConstants.Authentication.DefaultScheme);
+            _resourceOptions.Value.PolicyName);
 
         if (identity == null)
         {

@@ -55,7 +55,7 @@ public class GuardhouseIntrospectionService(
                 "Please configure these values in GuardhouseResourceOptions.");
         }
 
-        var cacheKey = $"{IntrospectionCacheKeyPrefix}{GetTokenHash(token)}";
+        var cacheKey = $"{IntrospectionCacheKeyPrefix}{(resourceOptions.PolicyName == GuardhouseConstants.Authentication.DefaultScheme ? string.Empty : resourceOptions.PolicyName + "_")}{GetTokenHash(token)}";
         if (memoryCache.TryGetValue(cacheKey, out IntrospectionResponse? cachedResult) && cachedResult != null)
         {
             _logger.LogDebugIf(options.Value.EnableDebug, "Using cached introspection result");

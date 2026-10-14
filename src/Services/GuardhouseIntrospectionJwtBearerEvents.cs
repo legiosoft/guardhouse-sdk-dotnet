@@ -30,7 +30,7 @@ public class GuardhouseIntrospectionJwtBearerEvents(
         if (context.SecurityToken is GuardhouseOpaqueSecurityToken &&
             context.Principal?.Identity is ClaimsIdentity existingIdentity &&
             existingIdentity.IsAuthenticated &&
-            string.Equals(existingIdentity.AuthenticationType, GuardhouseConstants.Authentication.DefaultScheme, StringComparison.Ordinal))
+            string.Equals(existingIdentity.AuthenticationType, context.Scheme.Name, StringComparison.Ordinal))
         {
             await base.TokenValidated(context);
             return;
